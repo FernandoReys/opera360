@@ -1,0 +1,620 @@
+﻿'use client'
+
+import AppSidebar from '@/components/AppSidebar'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import {
+  LayoutDashboard,
+  CalendarDays,
+  UsersRound,
+  UserRoundCheck,
+  FileText,
+  WalletCards,
+  LogOut,
+  Moon,
+  Sun,
+  Bell,
+  TrendingUp,
+  DollarSign,
+  BriefcaseBusiness,
+  UtensilsCrossed,
+  Bus,
+  Settings,
+  ClipboardCheck,
+  Search,
+  Plus,
+  X,
+  Phone,
+  User,
+  BadgeDollarSign,
+  BusFront,
+  Wrench,
+} from 'lucide-react'
+
+import { createClient } from '@/lib/supabase/client'
+
+type TrabalhadoresProps = {
+  email: string
+  fullName: string
+  role: string
+}
+
+type WorkerItem = {
+  id: string
+  full_name: string
+  phone: string | null
+  document: string | null
+  role_name: string
+  daily_rate: number
+  transport_value: number
+  active: boolean
+  notes: string | null
+}
+
+export default function TrabalhadoresClient({
+  email,
+  fullName,
+  role,
+}: TrabalhadoresProps) {
+  const router = useRouter()
+
+  const [dark, setDark] = useState(true)
+
+  const [workers, setWorkers] = useState<WorkerItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+
+  const [modalOpen, setModalOpen] = useState(false)
+
+  const [workerName, setWorkerName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [workerDocument, setWorkerDocument] = useState('')
+  const [roleName, setRoleName] = useState('Ajudante')
+  const [dailyRate, setDailyRate] = useState('0')
+  const [transportValue, setTransportValue] = useState('0')
+  const [notes, setNotes] = useState('')
+
+  const owner = role === 'owner'
+
+  useEffect(() => {
+    const saved = localStorage.getItem('theme')
+    const isDark = saved ? saved === 'dark' : true
+
+    setDark(isDark)
+    window.document.documentElement.dataset.theme = isDark
+      ? 'dark'
+      : 'light'
+
+    void loadWorkers()
+  }, [])
+
+  function toggleTheme() {
+    const next = !dark
+
+    setDark(next)
+
+    window.document.documentElement.dataset.theme = next
+      ? 'dark'
+      : 'light'
+
+    localStorage.setItem('theme', next ? 'dark' : 'light')
+  }
+
+  async function logout() {
+    const supabase = createClient()
+
+    await supabase.auth.signOut()
+
+    router.replace('/login')
+    router.refresh()
+  }
+
+  async function loadWorkers() {
+    setLoading(true)
+
+    const supabase = createClient()
+
+    const { data, error } = await supabase
+      .from('workers')
+      .select(`
+        id,
+        full_name,
+        phone,
+        document,
+        role_name,
+        daily_rate,
+        transport_value,
+        active,
+        notes
+      `)
+      .order('full_name')
+
+    if (error) {
+      console.error('Erro ao carregar trabalhadores:', error.message)
+      setWorkers([])
+    } else {
+      setWorkers((data ?? []) as WorkerItem[])
+    }
+
+    setLoading(false)
+  }
+
+  const filteredWorkers = useMemo(() => {
+    const query = search.trim().toLowerCase()
+
+    return workers.filter((worker) => {
+      const matchesSearch =
+        !query ||
+        worker.full_name.toLowerCase().includes(query) ||
+        worker.role_name.toLowerCase().includes(query) ||
+        (worker.phone ?? '').toLowerCase().includes(query) ||
+        (worker.document ?? '').toLowerCase().includes(query)
+
+      const matchesStatus =
+        statusFilter === 'all'
+          ? true
+          : statusFilter === 'active'
+            ? worker.active
+            : !worker.active
+
+      return matchesSearch && matchesStatus
+    })
+  }, [workers, search, statusFilter])
+
+  function formatMoney(value: number) {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value ?? 0)
+  }
+
+  function resetForm() {
+    setWorkerName('')
+    setPhone('')
+    setWorkerDocument('')
+    setRoleName('Ajudante')
+    setDailyRate('0')
+    setTransportValue('0')
+    setNotes('')
+  }
+
+  function closeModal() {
+    setModalOpen(false)
+    resetForm()
+  }
+
+  async function createWorker(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+
+    if (!workerName.trim()) {
+      alert('Informe o nome do trabalhador.')
+      return
+    }
+
+    setSaving(true)
+
+    const supabase = createClient()
+
+    const { error } = await supabase.from('workers').insert({
+      full_name: workerName.trim(),
+      phone: phone.trim() || null,
+      document: workerDocument.trim() || null,
+      role_name: roleName.trim() || 'Ajudante',
+      daily_rate: Number(dailyRate || 0),
+      transport_value: Number(transportValue || 0),
+      active: true,
+      notes: notes.trim() || null,
+    })
+
+    setSaving(false)
+
+    if (error) {
+      alert(`Erro ao cadastrar trabalhador: ${error.message}`)
+      return
+    }
+
+    closeModal()
+    await loadWorkers()
+  }
+
+  return (
+    <div className="dashboard-shell">
+      <AppSidebar
+        fullName={fullName}
+        role={role}
+      />
+
+      <main className="dashboard-main">
+        <header className="dashboard-header">
+          <div>
+            <span className="eyebrow">OPERAÇÃO</span>
+
+            <h1>Trabalhadores</h1>
+
+            <p>
+              Cadastre e organize a equipe de mão de obra.
+            </p>
+          </div>
+
+          <div className="dashboard-actions">
+            <button
+              className="icon-btn"
+              aria-label="Notificações"
+            >
+              <Bell />
+            </button>
+
+            <button
+              className="icon-btn"
+              onClick={toggleTheme}
+              aria-label="Alterar tema"
+            >
+              {dark ? <Sun /> : <Moon />}
+            </button>
+
+            <button
+              className="logout-btn"
+              onClick={logout}
+            >
+              <LogOut />
+              Sair
+            </button>
+          </div>
+        </header>
+
+        <section className="worker-summary">
+          <article>
+            <span>TOTAL DE TRABALHADORES</span>
+            <strong>{workers.length}</strong>
+          </article>
+
+          <article>
+            <span>ATIVOS</span>
+            <strong className="event-green">
+              {workers.filter((worker) => worker.active).length}
+            </strong>
+          </article>
+
+          <article>
+            <span>INATIVOS</span>
+            <strong>
+              {workers.filter((worker) => !worker.active).length}
+            </strong>
+          </article>
+
+          <article>
+            <span>FUNÇÕES CADASTRADAS</span>
+            <strong>
+              {new Set(workers.map((worker) => worker.role_name)).size}
+            </strong>
+          </article>
+        </section>
+
+        <section className="events-toolbar">
+          <div className="events-search">
+            <Search />
+
+            <input
+              type="text"
+              placeholder="Buscar trabalhador, função, telefone..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          <div className="events-toolbar-actions">
+            <div className="event-filter">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="all">Todos</option>
+                <option value="active">Ativos</option>
+                <option value="inactive">Inativos</option>
+              </select>
+            </div>
+
+            <button
+              className="new-event-btn"
+              onClick={() => setModalOpen(true)}
+            >
+              <Plus />
+              Novo trabalhador
+            </button>
+          </div>
+        </section>
+
+        <section className="events-list-card">
+          {loading ? (
+            <div className="events-empty">
+              Carregando trabalhadores...
+            </div>
+          ) : filteredWorkers.length === 0 ? (
+            <div className="events-empty">
+              <UsersRound />
+
+              <strong>Nenhum trabalhador encontrado</strong>
+
+              <span>
+                Cadastre o primeiro trabalhador para começar.
+              </span>
+            </div>
+          ) : (
+            <div className="events-table-scroll">
+              <table className="management-table">
+                <thead>
+                  <tr>
+                    <th>Trabalhador</th>
+                    <th>Telefone</th>
+                    <th>Função</th>
+
+                    {owner && (
+                      <>
+                        <th>Diária</th>
+                        <th>Transporte</th>
+                      </>
+                    )}
+
+                    <th>Status</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {filteredWorkers.map((worker) => (
+                    <tr key={worker.id}>
+                      <td>
+                        <div className="event-name-cell">
+                          <div className="table-icon">
+                            <User />
+                          </div>
+
+                          <div>
+                            <strong>{worker.full_name}</strong>
+
+                            <span>
+                              {worker.document || 'Documento não informado'}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td>
+                        <div className="table-location">
+                          <Phone />
+                          {worker.phone || '-'}
+                        </div>
+                      </td>
+
+                      <td>
+                        <div className="table-location">
+                          <Wrench />
+                          {worker.role_name}
+                        </div>
+                      </td>
+
+                      {owner && (
+                        <>
+                          <td>
+                            <div className="table-location">
+                              <BadgeDollarSign />
+                              {formatMoney(worker.daily_rate)}
+                            </div>
+                          </td>
+
+                          <td>
+                            <div className="table-location">
+                              <BusFront />
+                              {formatMoney(worker.transport_value)}
+                            </div>
+                          </td>
+                        </>
+                      )}
+
+                      <td>
+                        <span
+                          className={
+                            worker.active
+                              ? 'event-status status-in_progress'
+                              : 'event-status status-cancelled'
+                          }
+                        >
+                          {worker.active ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </main>
+
+      {modalOpen && (
+        <div
+          className="event-modal-overlay"
+          onMouseDown={closeModal}
+        >
+          <div
+            className="event-modal"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="event-modal-header">
+              <div>
+                <span className="eyebrow">
+                  NOVO CADASTRO
+                </span>
+
+                <h2>Novo trabalhador</h2>
+
+                <p>
+                  Cadastre os dados principais do trabalhador.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeModal}
+                aria-label="Fechar"
+              >
+                <X />
+              </button>
+            </div>
+
+            <form
+              className="event-form"
+              onSubmit={createWorker}
+            >
+              <div className="event-form-grid">
+                <label className="event-field event-field-wide">
+                  <span>Nome completo *</span>
+
+                  <input
+                    value={workerName}
+                    onChange={(e) =>
+                      setWorkerName(e.target.value)
+                    }
+                    placeholder="Nome do trabalhador"
+                    required
+                  />
+                </label>
+
+                <label className="event-field">
+                  <span>CPF / Documento</span>
+
+                  <input
+                    value={workerDocument}
+                    onChange={(e) =>
+                      setWorkerDocument(e.target.value)
+                    }
+                    placeholder="CPF ou documento"
+                  />
+                </label>
+
+                <label className="event-field">
+                  <span>Telefone</span>
+
+                  <input
+                    value={phone}
+                    onChange={(e) =>
+                      setPhone(e.target.value)
+                    }
+                    placeholder="(00) 00000-0000"
+                  />
+                </label>
+
+                <label className="event-field">
+                  <span>Função</span>
+
+                  <select
+                    value={roleName}
+                    onChange={(e) =>
+                      setRoleName(e.target.value)
+                    }
+                  >
+                    <option value="Ajudante">
+                      Ajudante
+                    </option>
+
+                    <option value="Montador">
+                      Montador
+                    </option>
+
+                    <option value="Carregador">
+                      Carregador
+                    </option>
+
+                    <option value="Limpeza">
+                      Limpeza
+                    </option>
+
+                    <option value="Recepcionista">
+                      Recepcionista
+                    </option>
+
+                    <option value="Segurança">
+                      Segurança
+                    </option>
+
+                    <option value="Supervisor">
+                      Supervisor
+                    </option>
+
+                    <option value="Outros">
+                      Outros
+                    </option>
+                  </select>
+                </label>
+
+                <label className="event-field">
+                  <span>Valor da diária</span>
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={dailyRate}
+                    onChange={(e) =>
+                      setDailyRate(e.target.value)
+                    }
+                  />
+                </label>
+
+                <label className="event-field">
+                  <span>Valor de transporte</span>
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={transportValue}
+                    onChange={(e) =>
+                      setTransportValue(e.target.value)
+                    }
+                  />
+                </label>
+
+                <label className="event-field event-field-wide">
+                  <span>Observações</span>
+
+                  <textarea
+                    rows={4}
+                    value={notes}
+                    onChange={(e) =>
+                      setNotes(e.target.value)
+                    }
+                    placeholder="Observações sobre o trabalhador..."
+                  />
+                </label>
+              </div>
+
+              <div className="event-form-actions">
+                <button
+                  type="button"
+                  className="event-cancel-btn"
+                  onClick={closeModal}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  className="new-event-btn"
+                  disabled={saving}
+                >
+                  {saving
+                    ? 'Salvando...'
+                    : 'Cadastrar trabalhador'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
