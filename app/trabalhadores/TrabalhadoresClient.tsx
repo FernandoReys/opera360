@@ -118,7 +118,32 @@ export default function TrabalhadoresClient({
 
     const supabase = createClient()
 
-    const { data, error } = await supabase
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    let hiddenBefore: string | null = null
+
+    if (user) {
+      const { data: preference, error: preferenceError } =
+        await supabase
+          .from('module_view_preferences')
+          .select('hidden_before')
+          .eq('user_id', user.id)
+          .eq('entity_type', 'workers')
+          .maybeSingle()
+
+      if (preferenceError) {
+        console.error(
+          'Erro ao carregar preferência visual de workers:',
+          preferenceError.message
+        )
+      } else {
+        hiddenBefore = preference?.hidden_before ?? null
+      }
+    }
+
+    let workersQuery = supabase
       .from('workers')
       .select(`
         id,
@@ -132,6 +157,12 @@ export default function TrabalhadoresClient({
         notes
       `)
       .order('full_name')
+
+    if (hiddenBefore) {
+      workersQuery = workersQuery.gt('created_at', hiddenBefore)
+    }
+
+    const { data, error } = await workersQuery
 
     if (error) {
       console.error('Erro ao carregar trabalhadores:', error.message)

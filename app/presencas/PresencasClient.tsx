@@ -154,45 +154,76 @@ export default function PresencasClient({
 
     const supabase = createClient()
 
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    let hiddenBefore: string | null = null
+
+    if (user) {
+      const { data: preference, error: preferenceError } =
+        await supabase
+          .from('module_view_preferences')
+          .select('hidden_before')
+          .eq('user_id', user.id)
+          .eq('entity_type', 'attendances')
+          .maybeSingle()
+
+      if (preferenceError) {
+        console.error(
+          'Erro ao carregar preferência visual de attendances:',
+          preferenceError.message
+        )
+      } else {
+        hiddenBefore = preference?.hidden_before ?? null
+      }
+    }
+
+    let schedulesQuery = supabase
+      .from('schedules')
+      .select(`
+        id,
+        event_id,
+        worker_id,
+        work_date,
+        role_name,
+        start_time,
+        end_time,
+        status,
+
+        events (
+          id,
+          name
+        ),
+
+        workers (
+          id,
+          full_name,
+          phone,
+          role_name
+        ),
+
+        attendances (
+          id,
+          attendance_status,
+          check_in,
+          check_out,
+          notes
+        )
+      `)
+      .order('work_date', { ascending: false })
+
+    if (hiddenBefore) {
+      schedulesQuery = schedulesQuery.gt('created_at', hiddenBefore)
+    }
+
     const [eventsResponse, schedulesResponse] = await Promise.all([
       supabase
         .from('events')
         .select('id, name')
         .order('name'),
 
-      supabase
-        .from('schedules')
-        .select(`
-          id,
-          event_id,
-          worker_id,
-          work_date,
-          role_name,
-          start_time,
-          end_time,
-          status,
-
-          events (
-            id,
-            name
-          ),
-
-          workers (
-            id,
-            full_name,
-            phone,
-            role_name
-          ),
-
-          attendances (
-            id,
-            attendance_status,
-            check_in,
-            check_out,
-            notes
-          )
-        `)
-        .order('work_date', { ascending: false }),
+      schedulesQuery,
     ])
 
     if (!eventsResponse.error) {
@@ -204,7 +235,6 @@ export default function PresencasClient({
         'Erro ao carregar presenças:',
         schedulesResponse.error.message
       )
-
       setSchedules([])
     } else {
       setSchedules(

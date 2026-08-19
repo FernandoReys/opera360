@@ -144,6 +144,53 @@ export default function EscalasClient({
 
     const supabase = createClient()
 
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    let hiddenBefore: string | null = null
+
+    if (user) {
+      const { data: preference, error: preferenceError } =
+        await supabase
+          .from('module_view_preferences')
+          .select('hidden_before')
+          .eq('user_id', user.id)
+          .eq('entity_type', 'schedules')
+          .maybeSingle()
+
+      if (preferenceError) {
+        console.error(
+          'Erro ao carregar preferência visual de schedules:',
+          preferenceError.message
+        )
+      } else {
+        hiddenBefore = preference?.hidden_before ?? null
+      }
+    }
+
+    let schedulesQuery = supabase
+      .from('schedules')
+      .select(`
+        id,
+        work_date,
+        role_name,
+        start_time,
+        end_time,
+        status,
+        events (
+          name
+        ),
+        workers (
+          full_name
+        )
+      `)
+      .order('work_date', { ascending: false })
+
+    if (hiddenBefore) {
+      schedulesQuery = schedulesQuery.gt('created_at', hiddenBefore)
+    }
+
     const [eventsResponse, workersResponse, schedulesResponse] =
       await Promise.all([
         supabase
@@ -157,23 +204,7 @@ export default function EscalasClient({
           .eq('active', true)
           .order('full_name'),
 
-        supabase
-          .from('schedules')
-          .select(`
-            id,
-            work_date,
-            role_name,
-            start_time,
-            end_time,
-            status,
-            events (
-              name
-            ),
-            workers (
-              full_name
-            )
-          `)
-          .order('work_date', { ascending: false }),
+        schedulesQuery,
       ])
 
     if (!eventsResponse.error) {
@@ -184,7 +215,13 @@ export default function EscalasClient({
       setWorkers(workersResponse.data ?? [])
     }
 
-    if (!schedulesResponse.error) {
+    if (schedulesResponse.error) {
+      console.error(
+        'Erro ao carregar escalas:',
+        schedulesResponse.error.message
+      )
+      setSchedules([])
+    } else {
       setSchedules((schedulesResponse.data ?? []) as ScheduleItem[])
     }
 

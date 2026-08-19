@@ -135,6 +135,55 @@ export default function AdiantamentosClient({
 
     const supabase = createClient()
 
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    let hiddenBefore: string | null = null
+
+    if (user) {
+      const { data: preference, error: preferenceError } =
+        await supabase
+          .from('module_view_preferences')
+          .select('hidden_before')
+          .eq('user_id', user.id)
+          .eq('entity_type', 'advances')
+          .maybeSingle()
+
+      if (preferenceError) {
+        console.error(
+          'Erro ao carregar preferência visual de advances:',
+          preferenceError.message
+        )
+      } else {
+        hiddenBefore = preference?.hidden_before ?? null
+      }
+    }
+
+    let advancesQuery = supabase
+      .from('advances')
+      .select(`
+        id,
+        amount,
+        advance_type,
+        advance_date,
+        notes,
+        settled,
+        workers (
+          id,
+          full_name
+        ),
+        events (
+          id,
+          name
+        )
+      `)
+      .order('advance_date', { ascending: false })
+
+    if (hiddenBefore) {
+      advancesQuery = advancesQuery.gt('created_at', hiddenBefore)
+    }
+
     const [workersResponse, eventsResponse, advancesResponse] =
       await Promise.all([
         supabase
@@ -148,25 +197,7 @@ export default function AdiantamentosClient({
           .select('id, name')
           .order('start_date', { ascending: false }),
 
-        supabase
-          .from('advances')
-          .select(`
-            id,
-            amount,
-            advance_type,
-            advance_date,
-            notes,
-            settled,
-            workers (
-              id,
-              full_name
-            ),
-            events (
-              id,
-              name
-            )
-          `)
-          .order('advance_date', { ascending: false }),
+        advancesQuery,
       ])
 
     if (!workersResponse.error) {
@@ -377,7 +408,7 @@ export default function AdiantamentosClient({
           <div className="dashboard-actions">
             <button
               className="icon-btn"
-              aria-label="Notificações"
+              aria-label="NotificaÃ§Ãµes"
             >
               <Bell />
             </button>
@@ -466,7 +497,7 @@ export default function AdiantamentosClient({
               <BriefcaseBusiness />
               <strong>Nenhum adiantamento encontrado</strong>
               <span>
-                Cadastre o primeiro adiantamento para começar.
+                Cadastre o primeiro adiantamento para comeÃ§ar.
               </span>
             </div>
           ) : (
@@ -480,7 +511,7 @@ export default function AdiantamentosClient({
                     <th>Tipo</th>
                     <th>Valor</th>
                     <th>Status</th>
-                    <th>Ação</th>
+                    <th>AÃ§Ã£o</th>
                   </tr>
                 </thead>
 
@@ -501,7 +532,7 @@ export default function AdiantamentosClient({
                                 {getWorkerName(item)}
                               </strong>
                               <span>
-                                {item.notes || 'Sem observações'}
+                                {item.notes || 'Sem observaÃ§Ãµes'}
                               </span>
                             </div>
                           </div>
@@ -707,7 +738,7 @@ export default function AdiantamentosClient({
                 </label>
 
                 <label className="event-field event-field-wide">
-                  <span>Observações</span>
+                  <span>ObservaÃ§Ãµes</span>
 
                   <textarea
                     rows={4}

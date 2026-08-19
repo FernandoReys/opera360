@@ -9,7 +9,6 @@ import {
   LogOut,
   Moon,
   Sun,
-  Bell,
   TrendingUp,
   DollarSign,
   ChevronDown,
@@ -62,6 +61,11 @@ export default function DashboardClient({
 
   const owner = role === 'owner'
 
+  const displayName =
+    fullName && fullName.trim() && fullName !== 'Usuário'
+      ? fullName.trim()
+      : email.split('@')[0]
+
   return (
     <div className="dashboard-shell">
 
@@ -70,9 +74,10 @@ export default function DashboardClient({
       ===================================================== */}
 
       <AppSidebar
-        fullName={fullName}
+        fullName={displayName}
         role={role}
         menuOpen={menuOpen}
+        onMenuOpenChange={setMenuOpen}
       />
 
       {/* =====================================================
@@ -112,17 +117,7 @@ export default function DashboardClient({
           </div>
 
           <div className="dashboard-actions">
-
-            <button
-              className="icon-btn"
-              aria-label="Notificações"
-            >
-              <Bell />
-
-              <span className="notification-dot" />
-            </button>
-
-            <button
+<button
               className="icon-btn"
               onClick={toggleTheme}
               aria-label="Alterar tema"
@@ -133,11 +128,11 @@ export default function DashboardClient({
             <div className="header-user">
 
               <div className="avatar">
-                {fullName?.charAt(0)?.toUpperCase() || 'U'}
+                {displayName?.charAt(0)?.toUpperCase() || 'U'}
               </div>
 
               <div>
-                <strong>{fullName}</strong>
+                <strong>{displayName}</strong>
 
                 <span>
                   {owner ? 'Administrador' : 'Operacional'}
@@ -218,11 +213,11 @@ export default function DashboardClient({
               </span>
 
               <strong>
-                8
+                0
               </strong>
 
               <small>
-                24 próximos 7 dias
+                Nenhum evento cadastrado
               </small>
             </div>
 
@@ -238,11 +233,11 @@ export default function DashboardClient({
               </span>
 
               <strong>
-                156
+                0
               </strong>
 
               <small>
-                Em eventos hoje
+                Nenhum trabalhador em evento hoje
               </small>
             </div>
 
@@ -460,7 +455,10 @@ export default function DashboardClient({
                 </h3>
               </div>
 
-              <button className="period-btn" onClick={() => router.push('/eventos')}>
+              <button
+                className="period-btn"
+                onClick={() => router.push('/eventos')}
+              >
                 Ver todos
               </button>
 
@@ -484,167 +482,16 @@ export default function DashboardClient({
                 </thead>
 
                 <tbody>
-
                   <tr>
-
-                    <td>
-                      Expo Center Norte
-                    </td>
-
-                    <td>
-                      Empresa ABC
-                    </td>
-
-                    <td>
-                      20/05 - 24/05
-                    </td>
-
-                    <td>
-                      45
-                    </td>
-
-                    <td>
-                      <span className="status running">
-                        Em andamento
-                      </span>
-                    </td>
-
-                    <td>
-                      <div className="progress">
-                        <span style={{ width: '60%' }} />
+                    <td colSpan={6}>
+                      <div className="events-empty">
+                        <strong>Nenhum evento em andamento</strong>
+                        <span>
+                          Os eventos cadastrados aparecerão aqui automaticamente.
+                        </span>
                       </div>
                     </td>
-
                   </tr>
-
-                  <tr>
-
-                    <td>
-                      Feira Industrial SP
-                    </td>
-
-                    <td>
-                      Indústria XYZ
-                    </td>
-
-                    <td>
-                      18/05 - 22/05
-                    </td>
-
-                    <td>
-                      32
-                    </td>
-
-                    <td>
-                      <span className="status running">
-                        Em andamento
-                      </span>
-                    </td>
-
-                    <td>
-                      <div className="progress">
-                        <span style={{ width: '40%' }} />
-                      </div>
-                    </td>
-
-                  </tr>
-
-                  <tr>
-
-                    <td>
-                      Show Nacional
-                    </td>
-
-                    <td>
-                      Produtora LMN
-                    </td>
-
-                    <td>
-                      21/05 - 22/05
-                    </td>
-
-                    <td>
-                      28
-                    </td>
-
-                    <td>
-                      <span className="status running">
-                        Em andamento
-                      </span>
-                    </td>
-
-                    <td>
-                      <div className="progress">
-                        <span style={{ width: '80%' }} />
-                      </div>
-                    </td>
-
-                  </tr>
-
-                  <tr>
-
-                    <td>
-                      Evento Corporativo
-                    </td>
-
-                    <td>
-                      Empresa 123
-                    </td>
-
-                    <td>
-                      25/05 - 26/05
-                    </td>
-
-                    <td>
-                      18
-                    </td>
-
-                    <td>
-                      <span className="status scheduled">
-                        Programado
-                      </span>
-                    </td>
-
-                    <td>
-                      <div className="progress">
-                        <span style={{ width: '0%' }} />
-                      </div>
-                    </td>
-
-                  </tr>
-
-                  <tr>
-
-                    <td>
-                      Convenção Anual
-                    </td>
-
-                    <td>
-                      Corporativo QWE
-                    </td>
-
-                    <td>
-                      28/05 - 30/05
-                    </td>
-
-                    <td>
-                      35
-                    </td>
-
-                    <td>
-                      <span className="status scheduled">
-                        Programado
-                      </span>
-                    </td>
-
-                    <td>
-                      <div className="progress">
-                        <span style={{ width: '0%' }} />
-                      </div>
-                    </td>
-
-                  </tr>
-
                 </tbody>
 
               </table>

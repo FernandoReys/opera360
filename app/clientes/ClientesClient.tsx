@@ -1,34 +1,19 @@
 ﻿'use client'
 
-import AppSidebar from '@/components/AppSidebar'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import AppSidebar from '@/components/AppSidebar'
 import {
-  LayoutDashboard,
-  CalendarDays,
-  UsersRound,
-  UserRoundCheck,
-  FileText,
-  WalletCards,
-  LogOut,
-  Moon,
-  Sun,
-  Bell,
-  TrendingUp,
-  DollarSign,
-  BriefcaseBusiness,
-  UtensilsCrossed,
-  Bus,
-  Settings,
-  ClipboardCheck,
-  Search,
-  Plus,
-  X,
-  Phone,
-  Mail,
-  User,
   Building2,
+  LogOut,
+  Mail,
+  Moon,
+  Phone,
+  Plus,
+  Search,
+  Sun,
+  User,
+  X,
 } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase/client'
@@ -48,6 +33,7 @@ type ClientItem = {
   contact_name: string | null
   notes: string | null
   active: boolean
+  created_at: string
 }
 
 export default function ClientesClient({
@@ -72,14 +58,19 @@ export default function ClientesClient({
   const [contactName, setContactName] = useState('')
   const [notes, setNotes] = useState('')
 
-  const owner = role === 'owner'
+  const displayName =
+    fullName && fullName.trim() && fullName !== 'Usuário'
+      ? fullName.trim()
+      : email.split('@')[0]
 
   useEffect(() => {
     const saved = localStorage.getItem('theme')
     const isDark = saved ? saved === 'dark' : true
 
     setDark(isDark)
-    window.document.documentElement.dataset.theme = isDark ? 'dark' : 'light'
+    window.document.documentElement.dataset.theme = isDark
+      ? 'dark'
+      : 'light'
 
     void loadClients()
   }, [])
@@ -88,7 +79,10 @@ export default function ClientesClient({
     const next = !dark
 
     setDark(next)
-    window.document.documentElement.dataset.theme = next ? 'dark' : 'light'
+    window.document.documentElement.dataset.theme = next
+      ? 'dark'
+      : 'light'
+
     localStorage.setItem('theme', next ? 'dark' : 'light')
   }
 
@@ -106,7 +100,32 @@ export default function ClientesClient({
 
     const supabase = createClient()
 
-    const { data, error } = await supabase
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    let hiddenBefore: string | null = null
+
+    if (user) {
+      const { data: preference, error: preferenceError } =
+        await supabase
+          .from('module_view_preferences')
+          .select('hidden_before')
+          .eq('user_id', user.id)
+          .eq('entity_type', 'clients')
+          .maybeSingle()
+
+      if (preferenceError) {
+        console.error(
+          'Erro ao carregar preferência visual de clientes:',
+          preferenceError.message
+        )
+      } else {
+        hiddenBefore = preference?.hidden_before ?? null
+      }
+    }
+
+    let query = supabase
       .from('clients')
       .select(`
         id,
@@ -116,9 +135,16 @@ export default function ClientesClient({
         email,
         contact_name,
         notes,
-        active
+        active,
+        created_at
       `)
       .order('name')
+
+    if (hiddenBefore) {
+      query = query.gt('created_at', hiddenBefore)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       console.error('Erro ao carregar clientes:', error.message)
@@ -162,7 +188,9 @@ export default function ClientesClient({
     resetForm()
   }
 
-  async function createNewClient(e: React.FormEvent<HTMLFormElement>) {
+  async function createNewClient(
+    e: React.FormEvent<HTMLFormElement>
+  ) {
     e.preventDefault()
 
     if (!name.trim()) {
@@ -198,7 +226,7 @@ export default function ClientesClient({
   return (
     <div className="dashboard-shell">
       <AppSidebar
-        fullName={fullName}
+        fullName={displayName}
         role={role}
       />
 
@@ -207,14 +235,12 @@ export default function ClientesClient({
           <div>
             <span className="eyebrow">OPERAÇÃO</span>
             <h1>Clientes</h1>
-            <p>Cadastre e organize os clientes da empresa.</p>
+            <p>
+              Cadastre e organize os clientes da empresa.
+            </p>
           </div>
 
           <div className="dashboard-actions">
-            <button className="icon-btn" aria-label="Notificações">
-              <Bell />
-            </button>
-
             <button
               className="icon-btn"
               onClick={toggleTheme}
@@ -223,7 +249,10 @@ export default function ClientesClient({
               {dark ? <Sun /> : <Moon />}
             </button>
 
-            <button className="logout-btn" onClick={logout}>
+            <button
+              className="logout-btn"
+              onClick={logout}
+            >
               <LogOut />
               Sair
             </button>
@@ -239,14 +268,22 @@ export default function ClientesClient({
           <article>
             <span>CLIENTES ATIVOS</span>
             <strong className="event-green">
-              {clients.filter((client) => client.active).length}
+              {
+                clients.filter(
+                  (client) => client.active
+                ).length
+              }
             </strong>
           </article>
 
           <article>
             <span>INATIVOS</span>
             <strong>
-              {clients.filter((client) => !client.active).length}
+              {
+                clients.filter(
+                  (client) => !client.active
+                ).length
+              }
             </strong>
           </article>
         </section>
@@ -259,7 +296,9 @@ export default function ClientesClient({
               type="text"
               placeholder="Buscar cliente, contato, telefone..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) =>
+                setSearch(e.target.value)
+              }
             />
           </div>
 
@@ -274,12 +313,20 @@ export default function ClientesClient({
 
         <section className="events-list-card">
           {loading ? (
-            <div className="events-empty">Carregando clientes...</div>
+            <div className="events-empty">
+              Carregando clientes...
+            </div>
           ) : filteredClients.length === 0 ? (
             <div className="events-empty">
               <Building2 />
-              <strong>Nenhum cliente encontrado</strong>
-              <span>Cadastre o primeiro cliente para começar.</span>
+
+              <strong>
+                Nenhum cliente visível
+              </strong>
+
+              <span>
+                Cadastre um novo cliente para começar.
+              </span>
             </div>
           ) : (
             <div className="events-table-scroll">
@@ -305,8 +352,14 @@ export default function ClientesClient({
                           </div>
 
                           <div>
-                            <strong>{client.name}</strong>
-                            <span>{client.notes || 'Sem observações'}</span>
+                            <strong>
+                              {client.name}
+                            </strong>
+
+                            <span>
+                              {client.notes ||
+                                'Sem observações'}
+                            </span>
                           </div>
                         </div>
                       </td>
@@ -332,7 +385,9 @@ export default function ClientesClient({
                         </div>
                       </td>
 
-                      <td>{client.document || '-'}</td>
+                      <td>
+                        {client.document || '-'}
+                      </td>
 
                       <td>
                         <span
@@ -342,7 +397,9 @@ export default function ClientesClient({
                               : 'event-status status-cancelled'
                           }
                         >
-                          {client.active ? 'Ativo' : 'Inativo'}
+                          {client.active
+                            ? 'Ativo'
+                            : 'Inativo'}
                         </span>
                       </td>
                     </tr>
@@ -355,16 +412,27 @@ export default function ClientesClient({
       </main>
 
       {modalOpen && (
-        <div className="event-modal-overlay" onMouseDown={closeModal}>
+        <div
+          className="event-modal-overlay"
+          onMouseDown={closeModal}
+        >
           <div
             className="event-modal"
-            onMouseDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) =>
+              e.stopPropagation()
+            }
           >
             <div className="event-modal-header">
               <div>
-                <span className="eyebrow">NOVO CADASTRO</span>
+                <span className="eyebrow">
+                  NOVO CADASTRO
+                </span>
+
                 <h2>Novo cliente</h2>
-                <p>Cadastre as informações principais do cliente.</p>
+
+                <p>
+                  Cadastre as informações principais do cliente.
+                </p>
               </div>
 
               <button
@@ -376,14 +444,21 @@ export default function ClientesClient({
               </button>
             </div>
 
-            <form className="event-form" onSubmit={createNewClient}>
+            <form
+              className="event-form"
+              onSubmit={createNewClient}
+            >
               <div className="event-form-grid">
                 <label className="event-field event-field-wide">
-                  <span>Nome / Razão social *</span>
+                  <span>
+                    Nome / Razão social *
+                  </span>
 
                   <input
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) =>
+                      setName(e.target.value)
+                    }
                     placeholder="Ex.: Empresa ABC"
                     required
                   />
@@ -394,17 +469,27 @@ export default function ClientesClient({
 
                   <input
                     value={clientDocument}
-                    onChange={(e) => setClientDocument(e.target.value)}
+                    onChange={(e) =>
+                      setClientDocument(
+                        e.target.value
+                      )
+                    }
                     placeholder="Documento"
                   />
                 </label>
 
                 <label className="event-field">
-                  <span>Nome do contato</span>
+                  <span>
+                    Nome do contato
+                  </span>
 
                   <input
                     value={contactName}
-                    onChange={(e) => setContactName(e.target.value)}
+                    onChange={(e) =>
+                      setContactName(
+                        e.target.value
+                      )
+                    }
                     placeholder="Responsável pelo cliente"
                   />
                 </label>
@@ -414,7 +499,9 @@ export default function ClientesClient({
 
                   <input
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) =>
+                      setPhone(e.target.value)
+                    }
                     placeholder="(00) 00000-0000"
                   />
                 </label>
@@ -425,7 +512,11 @@ export default function ClientesClient({
                   <input
                     type="email"
                     value={clientEmail}
-                    onChange={(e) => setClientEmail(e.target.value)}
+                    onChange={(e) =>
+                      setClientEmail(
+                        e.target.value
+                      )
+                    }
                     placeholder="contato@empresa.com"
                   />
                 </label>
@@ -436,7 +527,9 @@ export default function ClientesClient({
                   <textarea
                     rows={4}
                     value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
+                    onChange={(e) =>
+                      setNotes(e.target.value)
+                    }
                     placeholder="Informações importantes sobre o cliente..."
                   />
                 </label>
@@ -456,7 +549,9 @@ export default function ClientesClient({
                   className="new-event-btn"
                   disabled={saving}
                 >
-                  {saving ? 'Salvando...' : 'Cadastrar cliente'}
+                  {saving
+                    ? 'Salvando...'
+                    : 'Cadastrar cliente'}
                 </button>
               </div>
             </form>

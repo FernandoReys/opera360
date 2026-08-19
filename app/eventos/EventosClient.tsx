@@ -4,24 +4,11 @@ import AppSidebar from '@/components/AppSidebar'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  LayoutDashboard,
   CalendarDays,
-  UsersRound,
-  UserRoundCheck,
-  FileText,
-  WalletCards,
   LogOut,
   Moon,
-  Sun,
-  Bell,
-  TrendingUp,
-  DollarSign,
-  BriefcaseBusiness,
-  UtensilsCrossed,
-  Bus,
-  Settings,
-  ClipboardCheck,
   Search,
+  Sun,
   Plus,
   ChevronDown,
   MapPin,
@@ -46,6 +33,7 @@ type Client = {
 type EventItem = {
   id: string
   name: string
+  created_at: string
   location: string | null
   start_date: string
   end_date: string
@@ -114,22 +102,31 @@ export default function EventosClient({
 
   const owner = role === 'owner'
 
+  const displayName =
+    fullName && fullName.trim() && fullName !== 'Usuário'
+      ? fullName.trim()
+      : email.split('@')[0]
+
   useEffect(() => {
     const saved = localStorage.getItem('theme')
     const isDark = saved ? saved === 'dark' : true
 
     setDark(isDark)
-    document.documentElement.dataset.theme = isDark ? 'dark' : 'light'
+    window.document.documentElement.dataset.theme = isDark
+      ? 'dark'
+      : 'light'
 
-    loadData()
+    void loadData()
   }, [])
 
   function toggleTheme() {
     const next = !dark
 
     setDark(next)
+    window.document.documentElement.dataset.theme = next
+      ? 'dark'
+      : 'light'
 
-    document.documentElement.dataset.theme = next ? 'dark' : 'light'
     localStorage.setItem('theme', next ? 'dark' : 'light')
   }
 
@@ -147,27 +144,59 @@ export default function EventosClient({
 
     const supabase = createClient()
 
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    let hiddenBefore: string | null = null
+
+    if (user) {
+      const { data: preference, error: preferenceError } =
+        await supabase
+          .from('module_view_preferences')
+          .select('hidden_before')
+          .eq('user_id', user.id)
+          .eq('entity_type', 'events')
+          .maybeSingle()
+
+      if (preferenceError) {
+        console.error(
+          'Erro ao carregar preferência visual de eventos:',
+          preferenceError.message
+        )
+      } else {
+        hiddenBefore = preference?.hidden_before ?? null
+      }
+    }
+
+    let eventsQuery = supabase
+      .from('events')
+      .select(`
+        id,
+        name,
+        created_at,
+        location,
+        start_date,
+        end_date,
+        start_time,
+        end_time,
+        workers_needed,
+        contract_value,
+        meal_value,
+        status,
+        notes,
+        clients (
+          name
+        )
+      `)
+      .order('start_date', { ascending: false })
+
+    if (hiddenBefore) {
+      eventsQuery = eventsQuery.gt('created_at', hiddenBefore)
+    }
+
     const [eventsResponse, clientsResponse] = await Promise.all([
-      supabase
-        .from('events')
-        .select(`
-          id,
-          name,
-          location,
-          start_date,
-          end_date,
-          start_time,
-          end_time,
-          workers_needed,
-          contract_value,
-          meal_value,
-          status,
-          notes,
-          clients (
-            name
-          )
-        `)
-        .order('start_date', { ascending: false }),
+      eventsQuery,
 
       supabase
         .from('clients')
@@ -176,11 +205,23 @@ export default function EventosClient({
         .order('name'),
     ])
 
-    if (!eventsResponse.error) {
+    if (eventsResponse.error) {
+      console.error(
+        'Erro ao carregar eventos:',
+        eventsResponse.error.message
+      )
+      setEvents([])
+    } else {
       setEvents((eventsResponse.data ?? []) as EventItem[])
     }
 
-    if (!clientsResponse.error) {
+    if (clientsResponse.error) {
+      console.error(
+        'Erro ao carregar clientes:',
+        clientsResponse.error.message
+      )
+      setClients([])
+    } else {
       setClients(clientsResponse.data ?? [])
     }
 
@@ -307,18 +348,14 @@ export default function EventosClient({
 
   return (
     <div className="dashboard-shell">
-
       <AppSidebar
-        fullName={fullName}
+        fullName={displayName}
         role={role}
       />
 
       <main className="dashboard-main">
-
         <header className="dashboard-header">
-
           <div>
-
             <span className="eyebrow">
               OPERAÇÃO
             </span>
@@ -330,18 +367,13 @@ export default function EventosClient({
             <p>
               Gerencie todos os eventos e operações da empresa.
             </p>
-
           </div>
 
           <div className="dashboard-actions">
-
-            <button className="icon-btn">
-              <Bell />
-            </button>
-
             <button
               className="icon-btn"
               onClick={toggleTheme}
+              aria-label="Alterar tema"
             >
               {dark ? <Sun /> : <Moon />}
             </button>
@@ -353,13 +385,10 @@ export default function EventosClient({
               <LogOut />
               Sair
             </button>
-
           </div>
-
         </header>
 
         <section className="events-summary">
-
           <article>
             <span>
               TOTAL DE EVENTOS
@@ -414,13 +443,10 @@ export default function EventosClient({
               }
             </strong>
           </article>
-
         </section>
 
         <section className="events-toolbar">
-
           <div className="events-search">
-
             <Search />
 
             <input
@@ -431,13 +457,10 @@ export default function EventosClient({
               }
               placeholder="Buscar por evento, cliente ou local..."
             />
-
           </div>
 
           <div className="events-toolbar-actions">
-
             <div className="event-filter">
-
               <select
                 value={filter}
                 onChange={(e) =>
@@ -466,7 +489,6 @@ export default function EventosClient({
               </select>
 
               <ChevronDown />
-
             </div>
 
             <button
@@ -478,38 +500,30 @@ export default function EventosClient({
               <Plus />
               Novo evento
             </button>
-
           </div>
-
         </section>
 
         <section className="events-list-card">
-
           {loading ? (
             <div className="events-empty">
               Carregando eventos...
             </div>
           ) : filteredEvents.length === 0 ? (
             <div className="events-empty">
-
               <CalendarDays />
 
               <strong>
-                Nenhum evento encontrado
+                Nenhum evento visível
               </strong>
 
               <span>
-                Cadastre o primeiro evento para começar.
+                Cadastre um novo evento para começar.
               </span>
-
             </div>
           ) : (
             <div className="events-table-scroll">
-
               <table className="management-table">
-
                 <thead>
-
                   <tr>
                     <th>Evento</th>
                     <th>Cliente</th>
@@ -522,18 +536,13 @@ export default function EventosClient({
                       <th>Contrato</th>
                     )}
                   </tr>
-
                 </thead>
 
                 <tbody>
-
                   {filteredEvents.map((event) => (
                     <tr key={event.id}>
-
                       <td>
-
                         <div className="event-name-cell">
-
                           <div className="table-icon">
                             <Calendar />
                           </div>
@@ -549,9 +558,7 @@ export default function EventosClient({
                                 : 'Horário não informado'}
                             </span>
                           </div>
-
                         </div>
-
                       </td>
 
                       <td>
@@ -559,12 +566,10 @@ export default function EventosClient({
                       </td>
 
                       <td>
-
                         <div className="table-location">
                           <MapPin />
                           {event.location || '-'}
                         </div>
-
                       </td>
 
                       <td>
@@ -574,12 +579,10 @@ export default function EventosClient({
                       </td>
 
                       <td>
-
                         <div className="table-workers">
                           <Users />
                           {event.workers_needed}
                         </div>
-
                       </td>
 
                       <td>
@@ -597,19 +600,13 @@ export default function EventosClient({
                           )}
                         </td>
                       )}
-
                     </tr>
                   ))}
-
                 </tbody>
-
               </table>
-
             </div>
           )}
-
         </section>
-
       </main>
 
       {modalOpen && (
@@ -619,16 +616,13 @@ export default function EventosClient({
             setModalOpen(false)
           }
         >
-
           <div
             className="event-modal"
             onMouseDown={(e) =>
               e.stopPropagation()
             }
           >
-
             <div className="event-modal-header">
-
               <div>
                 <span className="eyebrow">
                   NOVO CADASTRO
@@ -651,18 +645,14 @@ export default function EventosClient({
               >
                 <X />
               </button>
-
             </div>
 
             <form
               className="event-form"
               onSubmit={createEvent}
             >
-
               <div className="event-form-grid">
-
                 <label className="event-field event-field-wide">
-
                   <span>
                     Nome do evento *
                   </span>
@@ -674,11 +664,9 @@ export default function EventosClient({
                     }
                     placeholder="Ex.: Expo Center Norte"
                   />
-
                 </label>
 
                 <label className="event-field">
-
                   <span>
                     Cliente
                   </span>
@@ -689,7 +677,6 @@ export default function EventosClient({
                       setClientId(e.target.value)
                     }
                   >
-
                     <option value="">
                       Sem cliente
                     </option>
@@ -702,13 +689,10 @@ export default function EventosClient({
                         {client.name}
                       </option>
                     ))}
-
                   </select>
-
                 </label>
 
                 <label className="event-field">
-
                   <span>
                     Local
                   </span>
@@ -720,11 +704,9 @@ export default function EventosClient({
                     }
                     placeholder="Local do evento"
                   />
-
                 </label>
 
                 <label className="event-field">
-
                   <span>
                     Data inicial *
                   </span>
@@ -736,11 +718,9 @@ export default function EventosClient({
                       setStartDate(e.target.value)
                     }
                   />
-
                 </label>
 
                 <label className="event-field">
-
                   <span>
                     Data final *
                   </span>
@@ -752,11 +732,9 @@ export default function EventosClient({
                       setEndDate(e.target.value)
                     }
                   />
-
                 </label>
 
                 <label className="event-field">
-
                   <span>
                     Horário inicial
                   </span>
@@ -768,11 +746,9 @@ export default function EventosClient({
                       setStartTime(e.target.value)
                     }
                   />
-
                 </label>
 
                 <label className="event-field">
-
                   <span>
                     Horário final
                   </span>
@@ -784,11 +760,9 @@ export default function EventosClient({
                       setEndTime(e.target.value)
                     }
                   />
-
                 </label>
 
                 <label className="event-field">
-
                   <span>
                     Trabalhadores necessários
                   </span>
@@ -801,11 +775,9 @@ export default function EventosClient({
                       setWorkersNeeded(e.target.value)
                     }
                   />
-
                 </label>
 
                 <label className="event-field">
-
                   <span>
                     Status
                   </span>
@@ -838,12 +810,10 @@ export default function EventosClient({
                       Cancelado
                     </option>
                   </select>
-
                 </label>
 
                 {owner && (
                   <label className="event-field">
-
                     <span>
                       Valor do contrato
                     </span>
@@ -859,12 +829,10 @@ export default function EventosClient({
                         )
                       }
                     />
-
                   </label>
                 )}
 
                 <label className="event-field">
-
                   <span>
                     Valor da marmita
                   </span>
@@ -878,11 +846,9 @@ export default function EventosClient({
                       setMealValue(e.target.value)
                     }
                   />
-
                 </label>
 
                 <label className="event-field event-field-wide">
-
                   <span>
                     Observações
                   </span>
@@ -895,13 +861,10 @@ export default function EventosClient({
                     }
                     placeholder="Informações importantes sobre o evento..."
                   />
-
                 </label>
-
               </div>
 
               <div className="event-form-actions">
-
                 <button
                   type="button"
                   className="event-cancel-btn"
@@ -921,16 +884,11 @@ export default function EventosClient({
                     ? 'Salvando...'
                     : 'Criar evento'}
                 </button>
-
               </div>
-
             </form>
-
           </div>
-
         </div>
       )}
-
     </div>
   )
 }
