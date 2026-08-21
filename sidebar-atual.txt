@@ -47,6 +47,7 @@ export default function AppSidebar({
       onMenuOpenChange?.(next)
       return
     }
+
     setInternalOpen(next)
   }
 
@@ -81,13 +82,11 @@ export default function AppSidebar({
 
       <aside className={`dash-sidebar ${open ? 'open' : ''}`}>
         <div className="dash-brand">
-          <div className="dash-logo">CW</div>
+          <div className="dash-logo">O</div>
 
-          <div className="conectworks-brand">
-            <strong>
-              CONECT<span>WORKS</span>
-            </strong>
-            <small>EVENTOS &amp; SERVIÇOS</small>
+          <div>
+            <strong>MÃO DE OBRA</strong>
+            <span>TERCEIRIZADA</span>
           </div>
 
           <button
@@ -104,31 +103,65 @@ export default function AppSidebar({
           <div className="nav-title">OPERAÇÃO</div>
 
           <nav className="dash-nav">
-            <Link href="/dashboard" className={active('/dashboard')} onClick={closeMobileMenu}>
+            <Link
+              href="/dashboard"
+              className={active('/dashboard')}
+              onClick={closeMobileMenu}
+            >
               <LayoutDashboard />
               Dashboard
             </Link>
-            <Link href="/clientes" className={active('/clientes')} onClick={closeMobileMenu}>
+
+            <Link
+              href="/clientes"
+              className={active('/clientes')}
+              onClick={closeMobileMenu}
+            >
               <UsersRound />
               Clientes
             </Link>
-            <Link href="/orcamentos" className={active('/orcamentos')} onClick={closeMobileMenu}>
+
+            <Link
+              href="/orcamentos"
+              className={active('/orcamentos')}
+              onClick={closeMobileMenu}
+            >
               <FileText />
               Orçamentos
             </Link>
-            <Link href="/eventos" className={active('/eventos')} onClick={closeMobileMenu}>
+
+            <Link
+              href="/eventos"
+              className={active('/eventos')}
+              onClick={closeMobileMenu}
+            >
               <CalendarDays />
               Eventos
             </Link>
-            <Link href="/escalas" className={active('/escalas')} onClick={closeMobileMenu}>
+
+            <Link
+              href="/escalas"
+              className={active('/escalas')}
+              onClick={closeMobileMenu}
+            >
               <ClipboardCheck />
               Escalas
             </Link>
-            <Link href="/trabalhadores" className={active('/trabalhadores')} onClick={closeMobileMenu}>
+
+            <Link
+              href="/trabalhadores"
+              className={active('/trabalhadores')}
+              onClick={closeMobileMenu}
+            >
               <UsersRound />
               Trabalhadores
             </Link>
-            <Link href="/presencas" className={active('/presencas')} onClick={closeMobileMenu}>
+
+            <Link
+              href="/presencas"
+              className={active('/presencas')}
+              onClick={closeMobileMenu}
+            >
               <UserRoundCheck />
               Presenças
             </Link>
@@ -138,25 +171,48 @@ export default function AppSidebar({
 
           <nav className="dash-nav">
             {owner && (
-              <Link href="/financeiro" className={active('/financeiro')} onClick={closeMobileMenu}>
+              <Link
+                href="/financeiro"
+                className={active('/financeiro')}
+                onClick={closeMobileMenu}
+              >
                 <WalletCards />
                 Financeiro
               </Link>
             )}
 
-            <Link href="/pagamentos" className={active('/pagamentos')} onClick={closeMobileMenu}>
+            <Link
+              href="/pagamentos"
+              className={active('/pagamentos')}
+              onClick={closeMobileMenu}
+            >
               <DollarSign />
               Pagamentos
             </Link>
-            <Link href="/adiantamentos" className={active('/adiantamentos')} onClick={closeMobileMenu}>
+
+            <Link
+              href="/adiantamentos"
+              className={active('/adiantamentos')}
+              onClick={closeMobileMenu}
+            >
               <BriefcaseBusiness />
               Adiantamentos
             </Link>
-            <Link href="/marmitas" className={active('/marmitas')} onClick={closeMobileMenu}>
+
+            <Link
+              href="/marmitas"
+              className={active('/marmitas')}
+              onClick={closeMobileMenu}
+            >
               <UtensilsCrossed />
               Marmitas
             </Link>
-            <Link href="/transporte" className={active('/transporte')} onClick={closeMobileMenu}>
+
+            <Link
+              href="/transporte"
+              className={active('/transporte')}
+              onClick={closeMobileMenu}
+            >
               <Bus />
               Transporte
             </Link>
@@ -167,11 +223,20 @@ export default function AppSidebar({
               <div className="nav-title">RELATÓRIOS</div>
 
               <nav className="dash-nav">
-                <Link href="/relatorios" className={active('/relatorios')} onClick={closeMobileMenu}>
+                <Link
+                  href="/relatorios"
+                  className={active('/relatorios')}
+                  onClick={closeMobileMenu}
+                >
                   <FileText />
                   Relatórios
                 </Link>
-                <Link href="/indicadores" className={active('/indicadores')} onClick={closeMobileMenu}>
+
+                <Link
+                  href="/indicadores"
+                  className={active('/indicadores')}
+                  onClick={closeMobileMenu}
+                >
                   <TrendingUp />
                   Indicadores
                 </Link>
@@ -181,7 +246,11 @@ export default function AppSidebar({
         </div>
 
         <div className="sidebar-bottom">
-          <Link href="/configuracoes" className={active('/configuracoes')} onClick={closeMobileMenu}>
+          <Link
+            href="/configuracoes"
+            className={active('/configuracoes')}
+            onClick={closeMobileMenu}
+          >
             <Settings />
             Configurações
           </Link>

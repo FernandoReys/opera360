@@ -166,12 +166,15 @@ function getMonthBuckets(count = 6) {
   return result
 }
 
-function linePoints(values: number[], width = 700, height = 220) {
+function linePoints(
+  values: number[],
+  maxValue: number,
+  width = 700,
+  height = 220
+) {
   if (values.length === 0) return ''
 
-  const max = Math.max(...values, 1)
-  const min = Math.min(...values, 0)
-  const range = Math.max(max - min, 1)
+  const safeMax = Math.max(maxValue, 1)
 
   return values
     .map((value, index) => {
@@ -180,7 +183,7 @@ function linePoints(values: number[], width = 700, height = 220) {
           ? width / 2
           : (index / (values.length - 1)) * width
 
-      const normalized = (value - min) / range
+      const normalized = Math.max(0, value) / safeMax
       const y = height - normalized * (height - 30) - 15
 
       return `${x.toFixed(1)},${y.toFixed(1)}`
@@ -198,6 +201,7 @@ export default function DashboardClient({
   const [dark, setDark] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [chartPeriod, setChartPeriod] = useState<1 | 3 | 6 | 12>(6)
 
   const [events, setEvents] = useState<EventItem[]>([])
   const [schedules, setSchedules] = useState<ScheduleItem[]>([])
@@ -427,7 +431,7 @@ export default function DashboardClient({
   const currentProfit = currentRevenue - currentCosts
 
   const monthBuckets = useMemo(() => {
-    const buckets = getMonthBuckets(6)
+    const buckets = getMonthBuckets(chartPeriod)
     const map = new Map(buckets.map((bucket) => [bucket.key, bucket]))
 
     events.forEach((event) => {
@@ -492,18 +496,30 @@ export default function DashboardClient({
     })
 
     return buckets
-  }, [events, payments, meals, transports, advances])
+  }, [events, payments, meals, transports, advances, chartPeriod])
+
+  const chartMax = Math.max(
+    ...monthBuckets.flatMap((bucket) => [
+      bucket.revenue,
+      bucket.costs,
+      Math.max(bucket.profit, 0),
+    ]),
+    1
+  )
 
   const revenuePoints = linePoints(
-    monthBuckets.map((bucket) => bucket.revenue)
+    monthBuckets.map((bucket) => bucket.revenue),
+    chartMax
   )
 
   const costPoints = linePoints(
-    monthBuckets.map((bucket) => bucket.costs)
+    monthBuckets.map((bucket) => bucket.costs),
+    chartMax
   )
 
   const profitPoints = linePoints(
-    monthBuckets.map((bucket) => bucket.profit)
+    monthBuckets.map((bucket) => Math.max(bucket.profit, 0)),
+    chartMax
   )
 
   const totalCostDistribution = currentCosts
@@ -691,10 +707,24 @@ export default function DashboardClient({
                 <div>
                   <h3>FATURAMENTO VS CUSTOS VS LUCRO</h3>
                 </div>
-                <button className="period-btn">
-                  6 meses
+                <div className="dashboard-period-select">
+                  <select
+                    value={chartPeriod}
+                    onChange={(e) =>
+                      setChartPeriod(
+                        Number(e.target.value) as 1 | 3 | 6 | 12
+                      )
+                    }
+                    aria-label="Selecionar período do gráfico"
+                  >
+                    <option value={1}>1 mês</option>
+                    <option value={3}>3 meses</option>
+                    <option value={6}>6 meses</option>
+                    <option value={12}>12 meses</option>
+                  </select>
+
                   <ChevronDown />
-                </button>
+                </div>
               </div>
 
               <div className="chart-legend">
@@ -781,8 +811,10 @@ export default function DashboardClient({
               <div><h3>EVENTOS EM ANDAMENTO</h3></div>
 
               <button
-                className="period-btn"
+                type="button"
+                className="period-btn dashboard-view-all"
                 onClick={() => router.push('/eventos')}
+                aria-label="Ver todos os eventos"
               >
                 Ver todos
               </button>
@@ -847,10 +879,24 @@ export default function DashboardClient({
             <article className="dash-panel cash-panel">
               <div className="panel-header">
                 <div><h3>FLUXO DE CAIXA (PERÍODO)</h3></div>
-                <button className="period-btn">
-                  6 meses
+                <div className="dashboard-period-select">
+                  <select
+                    value={chartPeriod}
+                    onChange={(e) =>
+                      setChartPeriod(
+                        Number(e.target.value) as 1 | 3 | 6 | 12
+                      )
+                    }
+                    aria-label="Selecionar período do gráfico"
+                  >
+                    <option value={1}>1 mês</option>
+                    <option value={3}>3 meses</option>
+                    <option value={6}>6 meses</option>
+                    <option value={12}>12 meses</option>
+                  </select>
+
                   <ChevronDown />
-                </button>
+                </div>
               </div>
 
               <div className="cash-legend">
