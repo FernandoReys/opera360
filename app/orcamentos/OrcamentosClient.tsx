@@ -12,6 +12,7 @@ import {
   LogOut,
   Moon,
   Plus,
+  Printer,
   Search,
   Sun,
   Trash2,
@@ -29,6 +30,25 @@ type OrcamentosProps = {
 type ClientItem = {
   id: string
   name: string
+}
+
+const workerCategoryDefinitions = [
+  { key: 'security', label: 'Segurança' },
+  { key: 'cleaning', label: 'Limpeza' },
+  { key: 'loaders', label: 'Carregadores' },
+  { key: 'helpers', label: 'Ajudantes' },
+] as const
+
+type WorkerCategoryKey = (typeof workerCategoryDefinitions)[number]['key']
+
+type WorkerCategoryInput = { quantity: string; dailyRate: string }
+
+type SavedWorkerCategory = {
+  key: WorkerCategoryKey
+  label: string
+  quantity: number
+  dailyRate: number
+  total: number
 }
 
 type QuoteItem = {
@@ -53,6 +73,9 @@ type QuoteItem = {
   total_cost: number
   profit_value: number
   margin_percent: number
+  invoice_fee_enabled: boolean
+  invoice_fee_percent: number
+  worker_categories: SavedWorkerCategory[] | null
   status: 'draft' | 'sent' | 'approved' | 'rejected'
   notes: string | null
   created_at: string
@@ -75,12 +98,12 @@ type QuoteForm = {
   location: string
   startDate: string
   endDate: string
-  workers: string
-  dailyRate: string
+  workerCategories: Record<WorkerCategoryKey, WorkerCategoryInput>
   transport: string
   meal: string
   otherCosts: string
   saleValue: string
+  invoiceFeeEnabled: boolean
   status: 'draft' | 'sent' | 'approved' | 'rejected'
   notes: string
 }
@@ -92,14 +115,28 @@ const emptyForm: QuoteForm = {
   location: '',
   startDate: '',
   endDate: '',
-  workers: '',
-  dailyRate: '',
+  workerCategories: {
+    security: { quantity: '', dailyRate: '' },
+    cleaning: { quantity: '', dailyRate: '' },
+    loaders: { quantity: '', dailyRate: '' },
+    helpers: { quantity: '', dailyRate: '' },
+  },
   transport: '',
   meal: '20',
   otherCosts: '0',
   saleValue: '',
+  invoiceFeeEnabled: false,
   status: 'draft',
   notes: '',
+}
+
+function getTodayForInput() {
+  const now = new Date()
+  const timezoneOffset = now.getTimezoneOffset() * 60000
+
+  return new Date(now.getTime() - timezoneOffset)
+    .toISOString()
+    .split('T')[0]
 }
 
 export default function OrcamentosClient({
@@ -108,6 +145,7 @@ export default function OrcamentosClient({
   role,
 }: OrcamentosProps) {
   const router = useRouter()
+  const today = getTodayForInput()
 
   const [dark, setDark] = useState(true)
   const [clients, setClients] = useState<ClientItem[]>([])
@@ -191,27 +229,55 @@ export default function OrcamentosClient({
   }
 
   const preview = useMemo(() => {
-    const workers = Number(form.workers || 0)
     const days = calculateDays(form.startDate, form.endDate)
-    const dailyRate = Number(form.dailyRate || 0)
+    const workerCategories = workerCategoryDefinitions.map((category) => {
+      const input = form.workerCategories[category.key]
+      const quantity = Number(input.quantity || 0)
+      const dailyRate = Number(input.dailyRate || 0)
+
+      return {
+        key: category.key,
+        label: category.label,
+        quantity,
+        dailyRate,
+        total: quantity * days * dailyRate,
+      }
+    })
+    const workers = workerCategories.reduce(
+      (sum, category) => sum + category.quantity,
+      0
+    )
     const transport = Number(form.transport || 0)
     const meal = Number(form.meal || 0)
     const other = Number(form.otherCosts || 0)
     const sale = Number(form.saleValue || 0)
 
-    const laborCost = workers * days * dailyRate
+    const laborCost = workerCategories.reduce(
+      (sum, category) => sum + category.total,
+      0
+    )
     const transportCost = workers * days * transport
     const mealCost = workers * days * meal
     const totalCost = laborCost + transportCost + mealCost + other
-    const profit = sale - totalCost
-    const margin = sale > 0 ? (profit / sale) * 100 : 0
+    const invoiceFeePercent = 7
+    const invoiceFeeValue = form.invoiceFeeEnabled
+      ? sale * (invoiceFeePercent / 100)
+      : 0
+    const netSaleValue = sale - invoiceFeeValue
+    const profit = netSaleValue - totalCost
+    const margin = netSaleValue > 0 ? (profit / netSaleValue) * 100 : 0
 
     return {
       days,
+      workers,
+      workerCategories,
       laborCost,
       transportCost,
       mealCost,
       totalCost,
+      invoiceFeePercent,
+      invoiceFeeValue,
+      netSaleValue,
       profit,
       margin,
     }
@@ -261,6 +327,7 @@ export default function OrcamentosClient({
         workers_quantity,
         days_quantity,
         daily_rate,
+        worker_categories,
         transport_per_worker,
         meal_per_worker,
         other_costs,
@@ -271,6 +338,8 @@ export default function OrcamentosClient({
         total_cost,
         profit_value,
         margin_percent,
+        invoice_fee_enabled,
+        invoice_fee_percent,
         status,
         notes,
         created_at,
@@ -434,8 +503,18 @@ export default function OrcamentosClient({
       return
     }
 
-    if (Number(form.workers || 0) <= 0) {
-      alert('Informe a quantidade de trabalhadores.')
+    if (form.startDate < today) {
+      alert('A data inicial deve ser hoje ou uma data futura.')
+      return
+    }
+
+    if (form.endDate < form.startDate) {
+      alert('A data final não pode ser anterior à data inicial.')
+      return
+    }
+
+    if (preview.workers <= 0) {
+      alert('Informe ao menos um trabalhador em uma categoria.')
       return
     }
 
@@ -452,13 +531,19 @@ export default function OrcamentosClient({
         event_location: form.location.trim() || null,
         start_date: form.startDate,
         end_date: form.endDate,
-        workers_quantity: Number(form.workers || 0),
+        workers_quantity: preview.workers,
         days_quantity: preview.days,
-        daily_rate: Number(form.dailyRate || 0),
+        daily_rate:
+          preview.workers > 0 && preview.days > 0
+            ? preview.laborCost / (preview.workers * preview.days)
+            : 0,
+        worker_categories: preview.workerCategories,
         transport_per_worker: Number(form.transport || 0),
         meal_per_worker: Number(form.meal || 0),
         other_costs: Number(form.otherCosts || 0),
         sale_value: Number(form.saleValue || 0),
+        invoice_fee_enabled: form.invoiceFeeEnabled,
+        invoice_fee_percent: preview.invoiceFeePercent,
         labor_cost: preview.laborCost,
         transport_cost: preview.transportCost,
         meal_cost: preview.mealCost,
@@ -480,6 +565,7 @@ export default function OrcamentosClient({
         workers_quantity,
         days_quantity,
         daily_rate,
+        worker_categories,
         transport_per_worker,
         meal_per_worker,
         other_costs,
@@ -490,6 +576,8 @@ export default function OrcamentosClient({
         total_cost,
         profit_value,
         margin_percent,
+        invoice_fee_enabled,
+        invoice_fee_percent,
         status,
         notes,
         created_at,
@@ -671,6 +759,94 @@ export default function OrcamentosClient({
     }
   }
 
+  function setWorkerCategoryField(
+    category: WorkerCategoryKey,
+    field: keyof WorkerCategoryInput,
+    value: string
+  ) {
+    setForm((current) => ({
+      ...current,
+      workerCategories: {
+        ...current.workerCategories,
+        [category]: {
+          ...current.workerCategories[category],
+          [field]: value,
+        },
+      },
+    }))
+  }
+
+  function escapeHtml(value: string) {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+  }
+
+  function printQuote(item: QuoteItem, version: 'client' | 'internal') {
+    const printWindow = window.open('', '_blank')
+
+    if (!printWindow) {
+      alert('Não foi possível abrir a visualização do PDF. Libere os pop-ups e tente novamente.')
+      return
+    }
+
+    const saleValue = Number(item.sale_value || 0)
+    const feePercent = Number(item.invoice_fee_percent || 7)
+    const feeValue = item.invoice_fee_enabled
+      ? saleValue * (feePercent / 100)
+      : 0
+    const netSaleValue = saleValue - feeValue
+    const isInternal = version === 'internal'
+    const client = escapeHtml(clientName(item))
+    const title = escapeHtml(item.title)
+    const eventName = escapeHtml(item.event_name)
+    const location = item.event_location
+      ? `<p><b>Local:</b> ${escapeHtml(item.event_location)}</p>`
+      : ''
+    const categoryRows = (item.worker_categories ?? [])
+      .filter((category) => Number(category.quantity) > 0)
+      .map(
+        (category) =>
+          `<tr><td>${escapeHtml(category.label)} - ${category.quantity} pessoa(s) x ${formatMoney(category.dailyRate)}/dia</td><td>${formatMoney(category.total)}</td></tr>`
+      )
+      .join('')
+    const internalRows = isInternal
+      ? `
+        ${categoryRows}
+        <tr><td>Mão de obra por categoria</td><td>${formatMoney(Number(item.labor_cost || 0))}</td></tr>
+        <tr><td>Valor total do orçamento</td><td>${formatMoney(saleValue)}</td></tr>
+        <tr><td>Nota fiscal ${item.invoice_fee_enabled ? `${feePercent}%` : '(não aplicada)'}</td><td>-${formatMoney(feeValue)}</td></tr>
+        <tr><td>Receita líquida</td><td>${formatMoney(netSaleValue)}</td></tr>
+        <tr><td>Custo total previsto</td><td>-${formatMoney(Number(item.total_cost || 0))}</td></tr>
+        <tr class="result"><td>Lucro previsto</td><td>${formatMoney(Number(item.profit_value || 0))} (${Number(item.margin_percent || 0).toFixed(1)}%)</td></tr>`
+      : `
+        <tr class="result"><td>Valor total do orçamento</td><td>${formatMoney(saleValue)}</td></tr>`
+
+    printWindow.document.write(`<!doctype html>
+      <html lang="pt-BR"><head><meta charset="utf-8" />
+      <title>${isInternal ? 'Orçamento interno' : 'Orçamento para cliente'} - ${title}</title>
+      <style>
+        * { box-sizing: border-box; } body { font-family: Arial, sans-serif; color: #17202a; margin: 0; padding: 42px; }
+        .header { border-bottom: 3px solid #1f7a58; padding-bottom: 20px; margin-bottom: 28px; } h1 { margin: 0; font-size: 26px; } .tag { color: #1f7a58; font-weight: 700; font-size: 12px; letter-spacing: 1px; }
+        h2 { margin: 26px 0 12px; font-size: 16px; } p { margin: 7px 0; line-height: 1.45; } table { width: 100%; border-collapse: collapse; margin-top: 12px; } td { padding: 13px 10px; border-bottom: 1px solid #e5e7eb; } td:last-child { text-align: right; font-weight: 700; } .result td { background: #eaf7f0; font-size: 17px; font-weight: 700; border-top: 2px solid #1f7a58; } .footer { margin-top: 42px; color: #667085; font-size: 12px; } @media print { body { padding: 24px; } }
+      </style></head><body>
+        <div class="header"><div class="tag">OPERA360 - GESTÃO OPERACIONAL</div><h1>${isInternal ? 'Orçamento interno' : 'Orçamento'}</h1></div>
+        <h2>${title}</h2>
+        <p><b>Cliente:</b> ${client}</p><p><b>Evento:</b> ${eventName}</p>${location}
+        <p><b>Período:</b> ${formatDate(item.start_date)} a ${formatDate(item.end_date)}</p>
+        <p><b>Equipe prevista:</b> ${item.workers_quantity} trabalhador(es) por ${item.days_quantity} dia(s)</p>
+        <table><tbody>${internalRows}</tbody></table>
+        ${item.notes ? `<h2>Observações</h2><p>${escapeHtml(item.notes)}</p>` : ''}
+        <p class="footer">Documento gerado em ${new Date().toLocaleDateString('pt-BR')}. ${isInternal ? 'Uso interno e confidencial.' : ''}</p>
+      </body></html>`)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => printWindow.print(), 250)
+  }
+
   return (
     <div className="dashboard-shell">
       <AppSidebar fullName={displayName} role={role} />
@@ -812,7 +988,8 @@ export default function OrcamentosClient({
                     <th>Lucro</th>
                     <th>Margem</th>
                     <th>Status</th>
-                    <th>Ação</th>
+                    <th>PDF</th>
+                    <th>Ações</th>
                   </tr>
                 </thead>
 
@@ -881,6 +1058,29 @@ export default function OrcamentosClient({
                             {statusLabel('rejected')}
                           </option>
                         </select>
+                      </td>
+
+                      <td>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button
+                            type="button"
+                            className="quote-create-event-btn"
+                            onClick={() => printQuote(item, 'client')}
+                            title="Gerar orçamento para o cliente"
+                          >
+                            <Printer />
+                            Cliente
+                          </button>
+                          <button
+                            type="button"
+                            className="quote-create-event-btn"
+                            onClick={() => printQuote(item, 'internal')}
+                            title="Gerar orçamento interno com NF e lucro"
+                          >
+                            <Printer />
+                            Interno
+                          </button>
+                        </div>
                       </td>
 
                       <td>
@@ -1034,6 +1234,7 @@ export default function OrcamentosClient({
                   <input
                     type="date"
                     value={form.startDate}
+                    min={today}
                     onChange={(e) =>
                       setField('startDate', e.target.value)
                     }
@@ -1046,6 +1247,7 @@ export default function OrcamentosClient({
                   <input
                     type="date"
                     value={form.endDate}
+                    min={form.startDate || today}
                     onChange={(e) =>
                       setField('endDate', e.target.value)
                     }
@@ -1053,32 +1255,48 @@ export default function OrcamentosClient({
                   />
                 </label>
 
-                <label className="event-field">
-                  <span>Trabalhadores *</span>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={form.workers}
-                    onChange={(e) =>
-                      setField('workers', e.target.value)
-                    }
-                    required
-                  />
-                </label>
-
-                <label className="event-field">
-                  <span>Diária por trabalhador</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.dailyRate}
-                    onChange={(e) =>
-                      setField('dailyRate', e.target.value)
-                    }
-                  />
-                </label>
+                <div className="event-field event-field-wide quote-categories">
+                  <span>Equipe por categoria *</span>
+                  <div className="quote-categories-grid">
+                    {workerCategoryDefinitions.map((category) => (
+                      <div className="quote-category-card" key={category.key}>
+                        <strong>{category.label}</strong>
+                        <label>
+                          Quantidade
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={form.workerCategories[category.key].quantity}
+                            onChange={(e) =>
+                              setWorkerCategoryField(
+                                category.key,
+                                'quantity',
+                                e.target.value
+                              )
+                            }
+                          />
+                        </label>
+                        <label>
+                          Diária por pessoa
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={form.workerCategories[category.key].dailyRate}
+                            onChange={(e) =>
+                              setWorkerCategoryField(
+                                category.key,
+                                'dailyRate',
+                                e.target.value
+                              )
+                            }
+                          />
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
                 <label className="event-field">
                   <span>Transporte por trabalhador/dia</span>
@@ -1133,6 +1351,43 @@ export default function OrcamentosClient({
                   />
                 </label>
 
+                <div className="event-field">
+                  <span>Nota fiscal</span>
+                  <button
+                    type="button"
+                    aria-pressed={form.invoiceFeeEnabled}
+                    onClick={() =>
+                      setField(
+                        'invoiceFeeEnabled',
+                        !form.invoiceFeeEnabled
+                      )
+                    }
+                    style={{
+                      alignSelf: 'flex-start',
+                      border: 0,
+                      borderRadius: 999,
+                      cursor: 'pointer',
+                      fontWeight: 700,
+                      padding: '10px 14px',
+                      background: form.invoiceFeeEnabled
+                        ? '#dcfce7'
+                        : '#e5e7eb',
+                      color: form.invoiceFeeEnabled
+                        ? '#166534'
+                        : '#475467',
+                    }}
+                  >
+                    {form.invoiceFeeEnabled
+                      ? 'NF 7% ativada'
+                      : 'Aplicar NF de 7%'}
+                  </button>
+                  <small>
+                    {form.invoiceFeeEnabled
+                      ? 'O imposto será descontado do lucro previsto.'
+                      : 'Ative para simular o custo da nota fiscal.'}
+                  </small>
+                </div>
+
                 <label className="event-field">
                   <span>Status</span>
                   <select
@@ -1170,7 +1425,7 @@ export default function OrcamentosClient({
                   <div>
                     <strong>Resultado previsto</strong>
                     <span>
-                      {preview.days} dia(s) · {Number(form.workers || 0)} trabalhador(es)
+                      {preview.days} dia(s) · {preview.workers} trabalhador(es)
                     </span>
                   </div>
                 </div>
@@ -1180,6 +1435,15 @@ export default function OrcamentosClient({
                     <span>Mão de obra</span>
                     <strong>{formatMoney(preview.laborCost)}</strong>
                   </div>
+
+                  {preview.workerCategories
+                    .filter((category) => category.quantity > 0)
+                    .map((category) => (
+                      <div key={category.key}>
+                        <span>{category.label}</span>
+                        <strong>{formatMoney(category.total)}</strong>
+                      </div>
+                    ))}
 
                   <div>
                     <span>Transporte</span>
@@ -1208,6 +1472,20 @@ export default function OrcamentosClient({
                     <strong>
                       {formatMoney(Number(form.saleValue || 0))}
                     </strong>
+                  </div>
+
+                  <div>
+                    <span>Nota fiscal (7%)</span>
+                    <strong>
+                      {form.invoiceFeeEnabled
+                        ? `-${formatMoney(preview.invoiceFeeValue)}`
+                        : 'Não aplicada'}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Receita líquida</span>
+                    <strong>{formatMoney(preview.netSaleValue)}</strong>
                   </div>
 
                   <div className="quote-result-profit">

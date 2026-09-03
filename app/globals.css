@@ -5356,3 +5356,188 @@ html[data-theme="light"] .dashboard-period-select select{
     font-size:12px;
   }
 }
+
+/* Nota fiscal no formulário de orçamento */
+.quote-nf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quote-nf-toggle {
+  width: fit-content;
+  border: 1px solid #d0d5dd;
+  border-radius: 999px;
+  background: #f2f4f7;
+  color: #475467;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 10px 16px;
+  transition: all 0.2s ease;
+}
+
+.quote-nf-toggle:hover {
+  border-color: #98a2b3;
+  transform: translateY(-1px);
+}
+
+.quote-nf-toggle.active {
+  background: #dcfae6;
+  border-color: #75d69c;
+  color: #087443;
+  box-shadow: 0 4px 12px rgba(8, 116, 67, 0.12);
+}
+
+.quote-nf-help {
+  color: #65676b;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.quote-nf-value {
+  color: #b42318;
+}
+
+.quote-net-revenue {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 10px;
+}
+
+
+/* Categorias de trabalhadores no orçamento */
+.quote-categories {
+  gap: 12px;
+}
+
+.quote-categories > span {
+  color: var(--text-primary, #101828);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.quote-categories-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.quote-category-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border-color, #0a0a0a);
+  border-radius: 14px;
+  background: var(--card-bg, #1b105c63);
+  transition: border-color 0.2s ease, transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.quote-category-card:hover {
+  border-color: #65b88d;
+  box-shadow: 0 8px 18px rgba(16, 120, 76, 0.08);
+  transform: translateY(-2px);
+}
+
+.quote-category-card strong {
+  grid-column: 1 / -1;
+  color: #f3f3f7;
+  font-size: 0.95rem;
+}
+
+.quote-category-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-secondary, #e5e8ee);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.quote-category-card input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--border-color, #eaedf1);
+  border-radius: 9px;
+  background: var(--input-bg, #cacdd6);
+  color: var(--text-primary, #101828);
+  font: inherit;
+  outline: none;
+  padding: 0 11px;
+}
+
+.quote-category-card input:focus {
+  border-color: #161880;
+  box-shadow: 0 0 0 3px rgba(22, 128, 77, 0.13);
+}
+
+/* Botões de PDF */
+.quote-create-event-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Tela menor */
+@media (max-width: 640px) {
+  .quote-categories-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quote-category-card {
+    grid-template-columns: 1fr;
+  }
+
+  .quote-category-card strong {
+    grid-column: auto;
+  }
+}
+
+/* Gráfico de faturamento, custos e lucro */
+.line-chart {
+  position: relative;
+  min-height: 250px;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.chart-svg {
+  position: absolute;
+  inset: 8px 0 26px;
+  width: 100%;
+  height: calc(100% - 34px);
+  overflow: visible;
+}
+
+.line-chart .line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.line-chart .revenue-line {
+  stroke: #60a5fa;
+  stroke-width: 2;
+  opacity: 0.55;
+  stroke-dasharray: 5 5;
+}
+
+.line-chart .cost-line {
+  stroke: #ef4444;
+}
+
+.line-chart .profit-line {
+  stroke: #22c55e;
+}
+
+.line-chart .chart-area {
+  pointer-events: none;
+}
+
+[data-theme='light'] .line-chart .revenue-line {
+  stroke: #2563eb;
+  opacity: 0.42;
+}

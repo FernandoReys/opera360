@@ -742,9 +742,42 @@ export default function DashboardClient({
                     preserveAspectRatio="none"
                     className="chart-svg"
                   >
+                    <defs>
+                      <linearGradient id="cost-area" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="#ef4444" stopOpacity="0.38" />
+                        <stop offset="100%" stopColor="#ef4444" stopOpacity="0" />
+                      </linearGradient>
+                      <linearGradient id="profit-area" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="#22c55e" stopOpacity="0.42" />
+                        <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
+                      </linearGradient>
+                      <filter id="line-glow" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="2.5" result="blur" />
+                        <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                      </filter>
+                    </defs>
+
+                    <polygon
+                      className="chart-area cost-area"
+                      points={`0,220 ${costPoints} 700,220`}
+                      fill="url(#cost-area)"
+                    />
+                    <polygon
+                      className="chart-area profit-area"
+                      points={`0,220 ${profitPoints} 700,220`}
+                      fill="url(#profit-area)"
+                    />
                     <polyline className="line revenue-line" points={revenuePoints} />
-                    <polyline className="line cost-line" points={costPoints} />
-                    <polyline className="line profit-line" points={profitPoints} />
+                    <polyline
+                      className="line cost-line"
+                      points={costPoints}
+                      filter="url(#line-glow)"
+                    />
+                    <polyline
+                      className="line profit-line"
+                      points={profitPoints}
+                      filter="url(#line-glow)"
+                    />
                   </svg>
                 )}
 
