@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import AppSidebar from '@/components/AppSidebar'
 import { useEffect, useMemo, useState } from 'react'
@@ -26,8 +26,7 @@ import {
   Plus,
   X,
   Calendar,
-  User,
-  Clock3,
+  Printer,
 } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase/client'
@@ -56,6 +55,7 @@ type WorkerItem = {
 
 type ScheduleItem = {
   id: string
+  event_id: string
   work_date: string
   role_name: string | null
   start_time: string | null
@@ -99,7 +99,6 @@ export default function EscalasClient({
   const [modalOpen, setModalOpen] = useState(false)
 
   const [eventId, setEventId] = useState('')
-  const [workDate, setWorkDate] = useState('')
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [selectedWorkers, setSelectedWorkers] = useState<string[]>([])
@@ -116,6 +115,17 @@ export default function EscalasClient({
       : 'light'
 
     void loadData()
+  }, [])
+
+  useEffect(() => {
+    const requestedEventId = new URLSearchParams(
+      window.location.search
+    ).get('eventId')
+
+    if (!requestedEventId) return
+
+    setEventId(requestedEventId)
+    setModalOpen(true)
   }, [])
 
   function toggleTheme() {
@@ -173,6 +183,7 @@ export default function EscalasClient({
       .from('schedules')
       .select(`
         id,
+        event_id,
         work_date,
         role_name,
         start_time,
@@ -269,6 +280,99 @@ export default function EscalasClient({
     })
   }, [schedules, search])
 
+  const scheduleableEvents = useMemo(() => {
+    const seen = new Set<string>()
+
+    return [...events]
+      .filter((event) =>
+        event.status === 'scheduled' || event.status === 'in_progress'
+      )
+      .sort((a, b) => a.start_date.localeCompare(b.start_date))
+      .filter((event) => {
+        const key = [
+          event.name.trim().toLowerCase(),
+          event.start_date,
+          event.end_date,
+        ].join('|')
+
+        if (seen.has(key)) return false
+
+        seen.add(key)
+        return true
+      })
+  }, [events])
+
+  const scheduleGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      { eventName: string; items: ScheduleItem[] }
+    >()
+
+    filteredSchedules.forEach((item) => {
+      const current = groups.get(item.event_id) ?? {
+        eventName: getEventName(item),
+        items: [],
+      }
+
+      current.items.push(item)
+      groups.set(item.event_id, current)
+    })
+
+    return [...groups.entries()].map(([eventId, group]) => ({
+      eventId,
+      ...group,
+    }))
+  }, [filteredSchedules])
+
+  function escapeHtml(value: string) {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+  }
+
+  function datesBetween(startDate: string, endDate: string) {
+    const start = new Date(`${startDate}T12:00:00`)
+    const end = new Date(`${endDate}T12:00:00`)
+    const dates: string[] = []
+
+    while (start.getTime() <= end.getTime()) {
+      dates.push(
+        `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`
+      )
+      start.setDate(start.getDate() + 1)
+    }
+
+    return dates
+  }
+
+  function printSchedules() {
+    const printWindow = window.open('', '_blank')
+
+    if (!printWindow) {
+      alert('Não foi possível abrir a visualização do PDF. Libere os pop-ups e tente novamente.')
+      return
+    }
+
+    const groupsHtml = scheduleGroups
+      .map(
+        (group) => `
+          <section>
+            <h2>${escapeHtml(group.eventName)} <small>${group.items.length} trabalhador(es)</small></h2>
+            <table><thead><tr><th>Trabalhador</th><th>Data</th><th>Função</th><th>Horário</th><th>Status</th></tr></thead>
+            <tbody>${group.items.map((item) => `<tr><td>${escapeHtml(getWorkerName(item))}</td><td>${formatDate(item.work_date)}</td><td>${escapeHtml(item.role_name || '-')}</td><td>${item.start_time ? item.start_time.slice(0, 5) : '--:--'} - ${item.end_time ? item.end_time.slice(0, 5) : '--:--'}</td><td>Escalado</td></tr>`).join('')}</tbody></table>
+          </section>`
+      )
+      .join('')
+
+    printWindow.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8" /><title>Escalas - Opera360</title><style>body{font-family:Arial,sans-serif;color:#17202a;margin:36px}header{border-bottom:3px solid #2563eb;padding-bottom:16px;margin-bottom:28px}h1{margin:0;font-size:26px}.tag{color:#2563eb;font-size:12px;font-weight:700;letter-spacing:1px}h2{font-size:17px;margin:26px 0 10px}h2 small{font-size:12px;color:#667085;font-weight:400}table{width:100%;border-collapse:collapse}th{text-align:left;background:#eff6ff;color:#1e3a5f}th,td{padding:10px;border-bottom:1px solid #e5e7eb;font-size:12px}.footer{margin-top:34px;color:#667085;font-size:11px}@media print{body{margin:20px}}</style></head><body><header><div class="tag">OPERA360 - GESTÃO OPERACIONAL</div><h1>Escalas por evento</h1></header>${groupsHtml || '<p>Nenhuma escala encontrada.</p>'}<p class="footer">Documento gerado em ${new Date().toLocaleDateString('pt-BR')}.</p></body></html>`)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => printWindow.print(), 250)
+  }
+
   function toggleWorker(workerId: string) {
     setSelectedWorkers((current) => {
       if (current.includes(workerId)) {
@@ -281,7 +385,6 @@ export default function EscalasClient({
 
   function resetForm() {
     setEventId('')
-    setWorkDate('')
     setStartTime('')
     setEndTime('')
     setSelectedWorkers([])
@@ -300,37 +403,58 @@ export default function EscalasClient({
       return
     }
 
-    if (!workDate) {
-      alert('Selecione a data da escala.')
-      return
-    }
-
     if (selectedWorkers.length === 0) {
       alert('Selecione pelo menos um trabalhador.')
       return
     }
 
-    setSaving(true)
+    if (!startTime || !endTime) {
+      alert('Informe o horário inicial e o horário final da escala.')
+      return
+    }
+
+    if (endTime <= startTime) {
+      alert('O horário final precisa ser maior que o horário inicial.')
+      return
+    }
 
     const selected = workers.filter((worker) =>
       selectedWorkers.includes(worker.id)
     )
 
-    const rows = selected.map((worker) => ({
-      event_id: eventId,
-      worker_id: worker.id,
-      work_date: workDate,
-      role_name: worker.role_name,
-      start_time: startTime || null,
-      end_time: endTime || null,
-      status: 'scheduled',
-    }))
+    const selectedEvent = events.find((event) => event.id === eventId)
+
+    if (!selectedEvent) {
+      alert('Evento não encontrado.')
+      return
+    }
+
+    setSaving(true)
+
+    const scheduleDates = datesBetween(
+      selectedEvent.start_date,
+      selectedEvent.end_date
+    )
+
+    const rows = selected.flatMap((worker) =>
+      scheduleDates.map((date) => ({
+        event_id: eventId,
+        worker_id: worker.id,
+        work_date: date,
+        role_name: worker.role_name,
+        // Os mesmos horários são gravados em todos os dias do evento.
+        start_time: startTime,
+        end_time: endTime,
+        status: 'scheduled',
+      }))
+    )
 
     const supabase = createClient()
 
-    const { error } = await supabase
+    const { data: createdSchedules, error } = await supabase
       .from('schedules')
       .insert(rows)
+      .select('id')
 
     setSaving(false)
 
@@ -344,6 +468,22 @@ export default function EscalasClient({
 
       alert(`Erro ao criar escala: ${error.message}`)
       return
+    }
+
+    const { error: attendanceError } = await supabase
+      .from('attendances')
+      .upsert(
+        (createdSchedules ?? []).map((schedule) => ({
+          schedule_id: schedule.id,
+          attendance_status: 'pending',
+        })),
+        { onConflict: 'schedule_id' }
+      )
+
+    if (attendanceError) {
+      alert(
+        `A escala foi criada, mas houve erro ao preparar as presenças: ${attendanceError.message}`
+      )
     }
 
     closeModal()
@@ -406,7 +546,7 @@ export default function EscalasClient({
           <article>
             <span>EVENTOS DISPONÍVEIS</span>
             <strong className="event-blue">
-              {events.length}
+              {scheduleableEvents.length}
             </strong>
           </article>
         </section>
@@ -423,13 +563,16 @@ export default function EscalasClient({
             />
           </div>
 
-          <button
-            className="new-event-btn"
-            onClick={() => setModalOpen(true)}
-          >
-            <Plus />
-            Nova escala
-          </button>
+          <div className="events-toolbar-actions">
+            <button type="button" className="event-cancel-btn" onClick={printSchedules}>
+              <Printer />
+              Gerar PDF
+            </button>
+            <button className="new-event-btn" onClick={() => setModalOpen(true)}>
+              <Plus />
+              Nova escala
+            </button>
+          </div>
         </section>
 
         <section className="events-list-card">
@@ -448,74 +591,31 @@ export default function EscalasClient({
               </span>
             </div>
           ) : (
-            <div className="events-table-scroll">
-              <table className="management-table">
-                <thead>
-                  <tr>
-                    <th>Evento</th>
-                    <th>Data</th>
-                    <th>Trabalhador</th>
-                    <th>Função</th>
-                    <th>Horário</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
+            <div className="operation-event-groups">
+              {scheduleGroups.map((group) => (
+                <article className="operation-event-group" key={group.eventId}>
+                  <header className="operation-event-group-header">
+                    <div className="table-icon"><Calendar /></div>
+                    <div>
+                      <span>EVENTO</span>
+                      <h3>{group.eventName}</h3>
+                    </div>
+                    <strong>{group.items.length} trabalhador(es)</strong>
+                  </header>
 
-                <tbody>
-                  {filteredSchedules.map((item) => (
-                    <tr key={item.id}>
-                      <td>
-                        <div className="event-name-cell">
-                          <div className="table-icon">
-                            <Calendar />
-                          </div>
-
-                          <div>
-                            <strong>
-                              {getEventName(item)}
-                            </strong>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td>{formatDate(item.work_date)}</td>
-
-                      <td>
-                        <div className="table-location">
-                          <User />
-                          {getWorkerName(item)}
-                        </div>
-                      </td>
-
-                      <td>
-                        {item.role_name || '-'}
-                      </td>
-
-                      <td>
-                        <div className="table-location">
-                          <Clock3 />
-
-                          {item.start_time
-                            ? item.start_time.slice(0, 5)
-                            : '--:--'}
-
-                          {' - '}
-
-                          {item.end_time
-                            ? item.end_time.slice(0, 5)
-                            : '--:--'}
-                        </div>
-                      </td>
-
-                      <td>
-                        <span className="event-status status-scheduled">
-                          Escalado
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                  <div className="operation-team-list">
+                    {group.items.map((item) => (
+                      <div className="operation-team-row" key={item.id}>
+                        <div><span>Trabalhador</span><strong>{getWorkerName(item)}</strong></div>
+                        <div><span>Data</span><strong>{formatDate(item.work_date)}</strong></div>
+                        <div><span>Função</span><strong>{item.role_name || '-'}</strong></div>
+                        <div><span>Horário</span><strong>{item.start_time ? item.start_time.slice(0, 5) : '--:--'} - {item.end_time ? item.end_time.slice(0, 5) : '--:--'}</strong></div>
+                        <span className="event-status status-scheduled">Escalado</span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
             </div>
           )}
         </section>
@@ -539,7 +639,7 @@ export default function EscalasClient({
                 <h2>Montar escala</h2>
 
                 <p>
-                  Escolha o evento, a data e os trabalhadores.
+                  Escolha o evento e a equipe. As escalas serão criadas em todos os dias do período.
                 </p>
               </div>
 
@@ -571,29 +671,28 @@ export default function EscalasClient({
                       Selecione um evento
                     </option>
 
-                    {events.map((event) => (
+                    {scheduleableEvents.map((event) => (
                       <option
                         key={event.id}
                         value={event.id}
                       >
-                        {event.name}
+                        {event.name} - {formatDate(event.start_date)} a{' '}
+                        {formatDate(event.end_date)}
                       </option>
                     ))}
                   </select>
                 </label>
 
-                <label className="event-field">
-                  <span>Data da escala *</span>
-
-                  <input
-                    type="date"
-                    value={workDate}
-                    onChange={(e) =>
-                      setWorkDate(e.target.value)
-                    }
-                    required
-                  />
-                </label>
+                <div className="event-field event-field-wide schedule-period-info">
+                  <span>Escala automática por período</span>
+                  {eventId ? (
+                    <small>
+                      Serão criadas escalas e presenças pendentes para todos os dias do evento selecionado.
+                    </small>
+                  ) : (
+                    <small>Selecione um evento para calcular os dias automaticamente.</small>
+                  )}
+                </div>
 
                 <label className="event-field">
                   <span>Horário inicial</span>
@@ -604,6 +703,7 @@ export default function EscalasClient({
                     onChange={(e) =>
                       setStartTime(e.target.value)
                     }
+                    required
                   />
                 </label>
 
@@ -616,6 +716,7 @@ export default function EscalasClient({
                     onChange={(e) =>
                       setEndTime(e.target.value)
                     }
+                    required
                   />
                 </label>
 
@@ -692,7 +793,7 @@ export default function EscalasClient({
                 >
                   {saving
                     ? 'Salvando...'
-                    : 'Criar escala'}
+                    : 'Criar escalas do evento'}
                 </button>
               </div>
             </form>
