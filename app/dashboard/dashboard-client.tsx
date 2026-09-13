@@ -50,8 +50,6 @@ type PaymentItem = {
   advance_value: number
   extra_value: number
   discount_value: number
-  total_value: number
-  payment_status: string
 }
 
 type MealItem = {
@@ -66,20 +64,12 @@ type TransportItem = {
   status: string
 }
 
-type AdvanceItem = {
-  advance_date: string
-  amount: number
-  settled: boolean
-}
-
 type DayBucket = {
   key: string
   label: string
   revenue: number
   costs: number
   profit: number
-  cashIn: number
-  cashOut: number
 }
 
 type CostBreakdown = {
@@ -158,8 +148,6 @@ function getDayBuckets(selectedMonth: string) {
       revenue: 0,
       costs: 0,
       profit: 0,
-      cashIn: 0,
-      cashOut: 0,
     })
   }
 
@@ -231,7 +219,6 @@ export default function DashboardClient({
   const [payments, setPayments] = useState<PaymentItem[]>([])
   const [meals, setMeals] = useState<MealItem[]>([])
   const [transports, setTransports] = useState<TransportItem[]>([])
-  const [advances, setAdvances] = useState<AdvanceItem[]>([])
 
   useEffect(() => {
     const saved = localStorage.getItem('theme')
@@ -271,7 +258,6 @@ export default function DashboardClient({
       paymentsResponse,
       mealsResponse,
       transportsResponse,
-      advancesResponse,
     ] = await Promise.all([
       supabase
         .from('events')
@@ -302,9 +288,7 @@ export default function DashboardClient({
           transport_value,
           advance_value,
           extra_value,
-          discount_value,
-          total_value,
-          payment_status
+          discount_value
         `),
 
       supabase
@@ -314,10 +298,6 @@ export default function DashboardClient({
       supabase
         .from('transports')
         .select('transport_date, total_value, status'),
-
-      supabase
-        .from('advances')
-        .select('advance_date, amount, settled'),
     ])
 
     if (eventsResponse.error) {
@@ -348,12 +328,6 @@ export default function DashboardClient({
       console.error('Erro ao carregar transportes:', transportsResponse.error.message)
     } else {
       setTransports((transportsResponse.data ?? []) as TransportItem[])
-    }
-
-    if (advancesResponse.error) {
-      console.error('Erro ao carregar adiantamentos:', advancesResponse.error.message)
-    } else {
-      setAdvances((advancesResponse.data ?? []) as AdvanceItem[])
     }
 
     setLoading(false)
@@ -470,7 +444,6 @@ export default function DashboardClient({
       const value = safeNumber(event.contract_value)
 
       bucket.revenue += value
-      bucket.cashIn += value
     })
 
     payments.forEach((payment) => {
@@ -485,10 +458,6 @@ export default function DashboardClient({
         safeNumber(payment.discount_value)
 
       bucket.costs += cost
-
-      if (payment.payment_status === 'paid') {
-        bucket.cashOut += safeNumber(payment.total_value)
-      }
     })
 
     meals.forEach((meal) => {
@@ -498,7 +467,6 @@ export default function DashboardClient({
 
       const value = safeNumber(meal.total_value)
       bucket.costs += value
-      bucket.cashOut += value
     })
 
     transports.forEach((transport) => {
@@ -508,15 +476,6 @@ export default function DashboardClient({
 
       const value = safeNumber(transport.total_value)
       bucket.costs += value
-      bucket.cashOut += value
-    })
-
-    advances.forEach((advance) => {
-      const bucket = map.get(advance.advance_date)
-
-      if (!bucket) return
-
-      bucket.cashOut += safeNumber(advance.amount)
     })
 
     let accumulatedRevenue = 0
@@ -531,7 +490,7 @@ export default function DashboardClient({
     })
 
     return buckets
-  }, [events, payments, meals, transports, advances, chartMonth])
+  }, [events, payments, meals, transports, chartMonth])
 
   const chartMax = Math.max(
     ...dayBuckets.flatMap((bucket) => [
@@ -563,55 +522,11 @@ export default function DashboardClient({
   const costAreaPath = areaPath(costChartPoints)
   const profitAreaPath = areaPath(profitChartPoints)
 
-  const totalCostDistribution = currentCosts
-
-  const costPercentages = {
-    labor:
-      totalCostDistribution > 0
-        ? (costBreakdown.labor / totalCostDistribution) * 100
-        : 0,
-    transport:
-      totalCostDistribution > 0
-        ? (costBreakdown.transport / totalCostDistribution) * 100
-        : 0,
-    meals:
-      totalCostDistribution > 0
-        ? (costBreakdown.meals / totalCostDistribution) * 100
-        : 0,
-    other:
-      totalCostDistribution > 0
-        ? (costBreakdown.other / totalCostDistribution) * 100
-        : 0,
+  const chartTotals = dayBuckets[dayBuckets.length - 1] ?? {
+    revenue: 0,
+    costs: 0,
+    profit: 0,
   }
-
-  const donutStyle = {
-    background: `conic-gradient(
-      #2563eb 0 ${costPercentages.labor}%,
-      #7c3aed ${costPercentages.labor}% ${
-        costPercentages.labor + costPercentages.transport
-      }%,
-      #f59e0b ${
-        costPercentages.labor + costPercentages.transport
-      }% ${
-        costPercentages.labor +
-        costPercentages.transport +
-        costPercentages.meals
-      }%,
-      #22c55e ${
-        costPercentages.labor +
-        costPercentages.transport +
-        costPercentages.meals
-      }% 100%
-    )`,
-  }
-
-  const maxCash = Math.max(
-    ...dayBuckets.flatMap((bucket) => [
-      bucket.cashIn,
-      bucket.cashOut,
-    ]),
-    1
-  )
 
   function eventProgress(event: EventItem) {
     const start = new Date(`${event.start_date}T00:00:00`).getTime()
@@ -741,12 +656,14 @@ export default function DashboardClient({
           </article>
         </section>
 
-        <section className="dashboard-grid">
+        <section className="dashboard-grid dashboard-grid-focus">
           {owner && (
             <article className="dash-panel chart-panel">
               <div className="panel-header">
                 <div>
-                  <h3>FATURAMENTO VS CUSTOS VS LUCRO POR DIA</h3>
+                  <span className="panel-label">VISÃO FINANCEIRA</span>
+                  <h3>DESEMPENHO FINANCEIRO DO MÊS</h3>
+                  <p className="panel-description">Evolução acumulada por dia</p>
                 </div>
                 <label className="dashboard-month-picker">
                   <span>Mês</span>
@@ -767,8 +684,19 @@ export default function DashboardClient({
                 <span><i className="legend-green" />Lucro</span>
               </div>
 
+              <div className="chart-summary-row">
+                <span>Faturamento <strong>{formatCompactMoney(chartTotals.revenue)}</strong></span>
+                <span>Custos <strong>{formatCompactMoney(chartTotals.costs)}</strong></span>
+                <span>Resultado <strong className={chartTotals.profit >= 0 ? 'positive' : 'negative'}>{formatCompactMoney(chartTotals.profit)}</strong></span>
+              </div>
+
               <div className="line-chart">
                 <div className="chart-grid-lines" />
+                <div className="chart-value-scale" aria-hidden="true">
+                  <span>{formatCompactMoney(chartMax)}</span>
+                  <span>{formatCompactMoney(chartMax / 2)}</span>
+                  <span>R$ 0</span>
+                </div>
 
                 {dayBuckets.length > 0 && (
                   <svg
@@ -832,51 +760,6 @@ export default function DashboardClient({
                   ))}
                 </div>
               </div>
-            </article>
-          )}
-
-          {owner && (
-            <article className="dash-panel costs-panel">
-              <div className="panel-header">
-                <div>
-                  <h3>DISTRIBUIÇÃO DE CUSTOS</h3>
-                </div>
-              </div>
-
-              {totalCostDistribution <= 0 ? (
-                <div className="dashboard-empty-chart">
-                  <strong>Sem custos no período</strong>
-                  <span>Pagamentos, transportes e marmitas aparecerão aqui.</span>
-                </div>
-              ) : (
-                <div className="cost-content">
-                  <div className="donut" style={donutStyle}>
-                    <div className="donut-center">
-                      <small>Total</small>
-                      <strong>{formatCompactMoney(totalCostDistribution)}</strong>
-                    </div>
-                  </div>
-
-                  <div className="cost-list">
-                    <div>
-                      <span><i className="cost-blue" />Mão de obra</span>
-                      <strong>{costPercentages.labor.toFixed(0)}%</strong>
-                    </div>
-                    <div>
-                      <span><i className="cost-purple" />Transporte</span>
-                      <strong>{costPercentages.transport.toFixed(0)}%</strong>
-                    </div>
-                    <div>
-                      <span><i className="cost-orange" />Marmitas</span>
-                      <strong>{costPercentages.meals.toFixed(0)}%</strong>
-                    </div>
-                    <div>
-                      <span><i className="cost-green" />Outros custos</span>
-                      <strong>{costPercentages.other.toFixed(0)}%</strong>
-                    </div>
-                  </div>
-                </div>
-              )}
             </article>
           )}
 
@@ -960,51 +843,6 @@ export default function DashboardClient({
             </div>
           </article>
 
-          {owner && (
-            <article className="dash-panel cash-panel">
-              <div className="panel-header">
-                <div><h3>FLUXO DE CAIXA POR DIA</h3></div>
-                <span className="cash-chart-month-label">
-                  {new Intl.DateTimeFormat('pt-BR', {
-                    month: 'long',
-                    year: 'numeric',
-                  }).format(new Date(`${chartMonth}-01T12:00:00`))}
-                </span>
-              </div>
-
-              <div className="cash-legend">
-                <span><i className="legend-green" />Recebimentos</span>
-                <span><i className="legend-red" />Pagamentos</span>
-              </div>
-
-              <div className="cash-chart-real">
-                <div
-                  className="cash-bars"
-                  style={{
-                    gridTemplateColumns: `repeat(${dayBuckets.length}, minmax(5px, 1fr))`,
-                  }}
-                >
-                  {dayBuckets.map((bucket) => (
-                    <div className="cash-month cash-day" key={bucket.key}>
-                      <div className="cash-bar-area">
-                        <div
-                          className="bar income"
-                          title={`Recebimentos: ${formatMoney(bucket.cashIn)}`}
-                          style={{ height: `${(bucket.cashIn / maxCash) * 100}%` }}
-                        />
-                        <div
-                          className="bar expense"
-                          title={`Pagamentos: ${formatMoney(bucket.cashOut)}`}
-                          style={{ height: `${(bucket.cashOut / maxCash) * 100}%` }}
-                        />
-                      </div>
-                      <span>{bucket.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </article>
-          )}
         </section>
       </main>
     </div>
