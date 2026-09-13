@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import AppSidebar from '@/components/AppSidebar'
 import { useEffect, useMemo, useState } from 'react'
@@ -14,6 +14,7 @@ import {
   User,
   Calendar,
   BadgeDollarSign,
+  Printer,
 } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase/client'
@@ -371,6 +372,87 @@ export default function PagamentosClient({
     }
   }, [rows])
 
+  const paymentGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      { eventName: string; workDate: string; rows: PaymentRow[]; total: number }
+    >()
+
+    filteredRows.forEach((row) => {
+      const groupKey = `${row.event_id}-${row.work_date}`
+      const current = groups.get(groupKey) ?? {
+        eventName: row.event_name,
+        workDate: row.work_date,
+        rows: [],
+        total: 0,
+      }
+
+      current.rows.push(row)
+      current.total += Number(row.total_value || 0)
+      groups.set(groupKey, current)
+    })
+
+    return [...groups.entries()]
+      .map(([groupKey, group]) => ({ groupKey, ...group }))
+      .sort((a, b) => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+
+        const dateA = new Date(`${a.workDate}T12:00:00`)
+        const dateB = new Date(`${b.workDate}T12:00:00`)
+        const offsetA = dateA.getTime() - today.getTime()
+        const offsetB = dateB.getTime() - today.getTime()
+
+        // Eventos de hoje e futuros ficam primeiro, do mais próximo ao mais distante.
+        if (offsetA >= 0 && offsetB >= 0) return offsetA - offsetB
+        if (offsetA >= 0) return -1
+        if (offsetB >= 0) return 1
+
+        // Eventos passados aparecem depois, começando pelo mais recente.
+        return offsetB - offsetA
+      })
+  }, [filteredRows])
+
+  function escapeHtml(value: string) {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+  }
+
+  function printEventPayments(group: (typeof paymentGroups)[number]) {
+    const printWindow = window.open('', '_blank')
+
+    if (!printWindow) {
+      alert('Não foi possível abrir a visualização do PDF. Libere os pop-ups e tente novamente.')
+      return
+    }
+
+    const rowsHtml = group.rows
+      .map(
+        (row) => `
+          <tr>
+            <td>${escapeHtml(row.worker_name)}</td>
+            <td>${formatDate(row.work_date)}</td>
+            <td>${formatMoney(row.daily_rate)}</td>
+            <td>${formatMoney(row.transport_value)}</td>
+            <td>${formatMoney(row.advance_value)}</td>
+            <td>${formatMoney(row.extra_value)}</td>
+            <td>${formatMoney(row.discount_value)}</td>
+            <td>${formatMoney(row.total_value)}</td>
+            <td>${row.payment_status === 'paid' ? 'Pago' : 'Pendente'}</td>
+          </tr>`
+      )
+      .join('')
+
+    printWindow.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8" /><title>Pagamentos - ${escapeHtml(group.eventName)}</title><style>body{font-family:Arial,sans-serif;color:#17202a;margin:36px}header{border-bottom:3px solid #16a34a;padding-bottom:16px;margin-bottom:28px}h1{margin:0;font-size:26px}.tag{color:#16a34a;font-size:12px;font-weight:700;letter-spacing:1px}h2{font-size:17px;margin:8px 0}table{width:100%;border-collapse:collapse}th{text-align:left;background:#ecfdf3;color:#14532d}th,td{padding:9px 7px;border-bottom:1px solid #e5e7eb;font-size:10px}.total{margin-top:18px;padding:14px;background:#ecfdf3;font-size:16px;font-weight:700;text-align:right}.footer{margin-top:34px;color:#667085;font-size:11px}@media print{body{margin:20px}}</style></head><body><header><div class="tag">OPERA360 - GESTÃO OPERACIONAL</div><h1>Relatório de pagamentos</h1></header><h2>Evento: ${escapeHtml(group.eventName)} — ${formatDate(group.workDate)}</h2><table><thead><tr><th>Trabalhador</th><th>Data</th><th>Diária</th><th>Transporte</th><th>Adiant.</th><th>Extra</th><th>Desconto</th><th>Total</th><th>Status</th></tr></thead><tbody>${rowsHtml}</tbody></table><div class="total">Total do dia: ${formatMoney(group.total)}</div><p class="footer">Documento gerado em ${new Date().toLocaleDateString('pt-BR')}.</p></body></html>`)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => printWindow.print(), 250)
+  }
+
   async function persistPayment(
     row: PaymentRow,
     changes?: Partial<PaymentRow>
@@ -594,135 +676,41 @@ export default function PagamentosClient({
               </span>
             </div>
           ) : (
-            <div className="events-table-scroll">
-              <table className="management-table payment-table">
-                <thead>
-                  <tr>
-                    <th>Trabalhador</th>
-                    <th>Evento</th>
-                    <th>Data</th>
-                    <th>Diária</th>
-                    <th>Transporte</th>
-                    <th>Adiantamento</th>
-                    <th>Extra</th>
-                    <th>Desconto</th>
-                    <th>Total</th>
-                    <th>Status</th>
-                    <th>Ação</th>
-                  </tr>
-                </thead>
+            <div className="payment-event-groups">
+              {paymentGroups.map((group) => (
+                <article className="payment-event-group payment-date-group" key={group.groupKey}>
+                  <header className="payment-event-header">
+                    <div className="table-icon"><Calendar /></div>
+                    <div><span>EVENTO</span><h3>{group.eventName}</h3><p className="payment-group-date">Data: {formatDate(group.workDate)}</p></div>
+                    <strong>{group.rows.length} pagamento(s)</strong>
+                    <button type="button" className="payment-pdf-btn" onClick={() => printEventPayments(group)}>
+                      <Printer /> PDF
+                    </button>
+                  </header>
 
-                <tbody>
-                  {filteredRows.map((row) => {
-                    const saving = savingId === row.attendance_id
+                  <div className="payment-event-list">
+                    {group.rows.map((row) => {
+                      const saving = savingId === row.attendance_id
 
-                    return (
-                      <tr key={row.attendance_id}>
-                        <td>
-                          <div className="event-name-cell">
-                            <div className="table-icon">
-                              <User />
-                            </div>
-                            <div>
-                              <strong>{row.worker_name}</strong>
-                            </div>
-                          </div>
-                        </td>
+                      return (
+                        <div className="payment-event-row" key={row.attendance_id}>
+                          <div className="payment-worker"><div className="table-icon"><User /></div><div><span>Nome</span><strong>{row.worker_name}</strong></div></div>
+                          <div><span>Data</span><strong>{formatDate(row.work_date)}</strong></div>
+                          <div><span>Diária + transporte</span><strong>{formatMoney(row.daily_rate + row.transport_value)}</strong></div>
+                          <div><span>Adiantamento</span><strong className="payment-advance-auto">{formatMoney(row.advance_value)}</strong></div>
+                          <label><span>Extra</span><input className="payment-money-input" type="number" min="0" step="0.01" defaultValue={row.extra_value} onBlur={(e) => savePayment(row, { extra_value: Number(e.target.value || 0) })} /></label>
+                          <label><span>Desconto</span><input className="payment-money-input" type="number" min="0" step="0.01" defaultValue={row.discount_value} onBlur={(e) => savePayment(row, { discount_value: Number(e.target.value || 0) })} /></label>
+                          <div><span>Total</span><strong className="payment-total">{formatMoney(row.total_value)}</strong></div>
+                          {row.payment_status === 'paid' ? <span className="attendance-status attendance-present"><CheckCircle2 />Pago</span> : <span className="attendance-status attendance-pending"><Clock3 />Pendente</span>}
+                          {row.payment_status !== 'paid' ? <button type="button" className="payment-pay-btn" disabled={saving} onClick={() => markAsPaid(row)}><CheckCircle2 />{saving ? 'Salvando...' : 'Pagar'}</button> : <button type="button" className="payment-reopen-btn" disabled={saving} onClick={() => reopenPayment(row)}>Reabrir</button>}
+                        </div>
+                      )
+                    })}
+                  </div>
 
-                        <td>
-                          <div className="table-location">
-                            <Calendar />
-                            {row.event_name}
-                          </div>
-                        </td>
-
-                        <td>{formatDate(row.work_date)}</td>
-                        <td>{formatMoney(row.daily_rate)}</td>
-                        <td>{formatMoney(row.transport_value)}</td>
-
-                        <td>
-                          <strong className="payment-advance-auto">
-                            {formatMoney(row.advance_value)}
-                          </strong>
-                        </td>
-
-                        <td>
-                          <input
-                            className="payment-money-input"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            defaultValue={row.extra_value}
-                            onBlur={(e) =>
-                              savePayment(row, {
-                                extra_value: Number(e.target.value || 0),
-                              })
-                            }
-                          />
-                        </td>
-
-                        <td>
-                          <input
-                            className="payment-money-input"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            defaultValue={row.discount_value}
-                            onBlur={(e) =>
-                              savePayment(row, {
-                                discount_value: Number(e.target.value || 0),
-                              })
-                            }
-                          />
-                        </td>
-
-                        <td>
-                          <strong className="payment-total">
-                            {formatMoney(row.total_value)}
-                          </strong>
-                        </td>
-
-                        <td>
-                          {row.payment_status === 'paid' ? (
-                            <span className="attendance-status attendance-present">
-                              <CheckCircle2 />
-                              Pago
-                            </span>
-                          ) : (
-                            <span className="attendance-status attendance-pending">
-                              <Clock3 />
-                              Pendente
-                            </span>
-                          )}
-                        </td>
-
-                        <td>
-                          {row.payment_status !== 'paid' ? (
-                            <button
-                              type="button"
-                              className="payment-pay-btn"
-                              disabled={saving}
-                              onClick={() => markAsPaid(row)}
-                            >
-                              <CheckCircle2 />
-                              {saving ? 'Salvando...' : 'Pagar'}
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="payment-reopen-btn"
-                              disabled={saving}
-                              onClick={() => reopenPayment(row)}
-                            >
-                              Reabrir
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                  <footer className="payment-event-total">Total do dia: <strong>{formatMoney(group.total)}</strong></footer>
+                </article>
+              ))}
             </div>
           )}
         </section>

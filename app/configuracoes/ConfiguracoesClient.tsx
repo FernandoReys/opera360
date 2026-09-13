@@ -9,6 +9,7 @@ import {
   Database,
   EyeOff,
   History,
+  ImageUp,
   LogOut,
   Moon,
   RotateCcw,
@@ -89,6 +90,8 @@ export default function ConfiguracoesClient({
 
   const [name, setName] = useState(fullName)
   const [savingProfile, setSavingProfile] = useState(false)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   const [logs, setLogs] = useState<ActivityLog[]>([])
   const [historyPreferences, setHistoryPreferences] = useState<HistoryViewPreference[]>([])
@@ -107,6 +110,27 @@ export default function ConfiguracoesClient({
 
     setDark(isDark)
     window.document.documentElement.dataset.theme = isDark ? 'dark' : 'light'
+  }, [])
+
+  useEffect(() => {
+    async function loadAvatar() {
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('avatar_url')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      setAvatarUrl(data?.avatar_url ?? null)
+    }
+
+    void loadAvatar()
   }, [])
 
   useEffect(() => {
@@ -170,6 +194,70 @@ export default function ConfiguracoesClient({
     }
 
     alert('Nome atualizado com sucesso.')
+    router.refresh()
+  }
+
+  async function uploadAvatar(file: File | null) {
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      alert('Escolha um arquivo de imagem.')
+      return
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert('A foto deve ter no máximo 2 MB.')
+      return
+    }
+
+    setUploadingAvatar(true)
+
+    const supabase = createClient()
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      setUploadingAvatar(false)
+      alert('Não foi possível identificar o usuário.')
+      return
+    }
+
+    const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const path = `${user.id}/avatar-${Date.now()}.${extension}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('profile-photos')
+      .upload(path, file, {
+        cacheControl: '3600',
+        contentType: file.type,
+        upsert: true,
+      })
+
+    if (uploadError) {
+      setUploadingAvatar(false)
+      alert(`Erro ao enviar foto: ${uploadError.message}`)
+      return
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from('profile-photos').getPublicUrl(path)
+
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ avatar_url: publicUrl })
+      .eq('id', user.id)
+
+    setUploadingAvatar(false)
+
+    if (profileError) {
+      alert(`A foto foi enviada, mas não foi possível salvar o perfil: ${profileError.message}`)
+      return
+    }
+
+    setAvatarUrl(`${publicUrl}?v=${Date.now()}`)
     router.refresh()
   }
 
@@ -543,6 +631,34 @@ export default function ConfiguracoesClient({
             </div>
 
             <form className="settings-form" onSubmit={saveProfile}>
+              <div className="profile-avatar-editor">
+                <div className="profile-avatar-preview">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="Foto do perfil" />
+                  ) : (
+                    name.trim().charAt(0).toUpperCase() || 'U'
+                  )}
+                </div>
+
+                <div>
+                  <strong>Foto do perfil</strong>
+                  <p>Use uma imagem quadrada de até 2 MB para facilitar a identificação da equipe.</p>
+                  <label className="profile-avatar-upload">
+                    <ImageUp />
+                    {uploadingAvatar ? 'Enviando...' : 'Escolher foto'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={uploadingAvatar}
+                      onChange={(event) => {
+                        void uploadAvatar(event.target.files?.[0] ?? null)
+                        event.currentTarget.value = ''
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+
               <label>
                 <span>Nome completo</span>
                 <input

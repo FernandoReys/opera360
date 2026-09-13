@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import AppSidebar from '@/components/AppSidebar'
 import { useEffect, useMemo, useState } from 'react'
@@ -29,6 +29,7 @@ import {
   User,
   Calendar,
   CircleHelp,
+  Printer,
 } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase/client'
@@ -42,6 +43,8 @@ type PresencasProps = {
 type EventItem = {
   id: string
   name: string
+  start_date: string
+  end_date: string
 }
 
 type AttendanceItem = {
@@ -126,6 +129,16 @@ export default function PresencasClient({
       : 'light'
 
     void loadData()
+  }, [])
+
+  useEffect(() => {
+    const requestedEventId = new URLSearchParams(
+      window.location.search
+    ).get('eventId')
+
+    if (requestedEventId) {
+      setSelectedEvent(requestedEventId)
+    }
   }, [])
 
   function toggleTheme() {
@@ -220,8 +233,8 @@ export default function PresencasClient({
     const [eventsResponse, schedulesResponse] = await Promise.all([
       supabase
         .from('events')
-        .select('id, name')
-        .order('name'),
+        .select('id, name, start_date, end_date')
+        .order('start_date', { ascending: false }),
 
       schedulesQuery,
     ])
@@ -377,6 +390,77 @@ export default function PresencasClient({
     }
   }, [filteredSchedules])
 
+  const attendanceGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      { eventName: string; workDate: string; items: ScheduleItem[] }
+    >()
+
+    filteredSchedules.forEach((item) => {
+      const event = getEvent(item)
+      const groupKey = `${item.event_id}-${item.work_date}`
+      const current = groups.get(groupKey) ?? {
+        eventName: event?.name ?? 'Evento não identificado',
+        workDate: item.work_date,
+        items: [],
+      }
+
+      current.items.push(item)
+      groups.set(groupKey, current)
+    })
+
+    return [...groups.entries()]
+      .map(([groupKey, group]) => ({ groupKey, ...group }))
+      .sort((a, b) => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+
+        const dateA = new Date(`${a.workDate}T12:00:00`)
+        const dateB = new Date(`${b.workDate}T12:00:00`)
+        const offsetA = dateA.getTime() - today.getTime()
+        const offsetB = dateB.getTime() - today.getTime()
+
+        if (offsetA >= 0 && offsetB >= 0) return offsetA - offsetB
+        if (offsetA >= 0) return -1
+        if (offsetB >= 0) return 1
+        return offsetB - offsetA
+      })
+  }, [filteredSchedules])
+
+  function escapeHtml(value: string) {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+  }
+
+  function printAttendances() {
+    const printWindow = window.open('', '_blank')
+
+    if (!printWindow) {
+      alert('Não foi possível abrir a visualização do PDF. Libere os pop-ups e tente novamente.')
+      return
+    }
+
+    const groupsHtml = attendanceGroups
+      .map(
+        (group) => `
+          <section>
+            <h2>${escapeHtml(group.eventName)} — ${formatDate(group.workDate)} <small>${group.items.length} trabalhador(es)</small></h2>
+            <table><thead><tr><th>Nome</th><th>Data</th><th>Função</th><th>Entrada</th><th>Saída</th><th>Status</th></tr></thead>
+            <tbody>${group.items.map((item) => { const worker = getWorker(item); const attendance = getAttendance(item); const status = attendance?.attendance_status ?? 'pending'; return `<tr><td>${escapeHtml(worker?.full_name ?? '-')}</td><td>${formatDate(item.work_date)}</td><td>${escapeHtml(item.role_name || worker?.role_name || '-')}</td><td>${attendance?.check_in?.slice(0, 5) ?? '--:--'}</td><td>${attendance?.check_out?.slice(0, 5) ?? '--:--'}</td><td>${statusText(status)}</td></tr>` }).join('')}</tbody></table>
+          </section>`
+      )
+      .join('')
+
+    printWindow.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8" /><title>Presenças - Opera360</title><style>body{font-family:Arial,sans-serif;color:#17202a;margin:36px}header{border-bottom:3px solid #16a34a;padding-bottom:16px;margin-bottom:28px}h1{margin:0;font-size:26px}.tag{color:#16a34a;font-size:12px;font-weight:700;letter-spacing:1px}h2{font-size:17px;margin:26px 0 10px}h2 small{font-size:12px;color:#667085;font-weight:400}table{width:100%;border-collapse:collapse}th{text-align:left;background:#ecfdf3;color:#14532d}th,td{padding:10px;border-bottom:1px solid #e5e7eb;font-size:12px}.footer{margin-top:34px;color:#667085;font-size:11px}@media print{body{margin:20px}}</style></head><body><header><div class="tag">OPERA360 - GESTÃO OPERACIONAL</div><h1>Relatório de presenças</h1></header>${groupsHtml || '<p>Nenhuma presença encontrada.</p>'}<p class="footer">Documento gerado em ${new Date().toLocaleDateString('pt-BR')}.</p></body></html>`)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => printWindow.print(), 250)
+  }
+
   async function updateAttendance(
     scheduleId: string,
     attendanceStatus:
@@ -398,7 +482,7 @@ export default function PresencasClient({
       ? getAttendance(current)
       : null
 
-    const { error } = await supabase
+    const { data: savedAttendance, error } = await supabase
       .from('attendances')
       .upsert(
         {
@@ -420,6 +504,10 @@ export default function PresencasClient({
           onConflict: 'schedule_id',
         }
       )
+      .select(
+        'id, attendance_status, check_in, check_out, notes'
+      )
+      .single()
 
     setSavingId(null)
 
@@ -431,7 +519,18 @@ export default function PresencasClient({
       return
     }
 
-    await loadData()
+    if (!savedAttendance) return
+
+    setSchedules((currentSchedules) =>
+      currentSchedules.map((item) =>
+        item.id === scheduleId
+          ? {
+              ...item,
+              attendances: savedAttendance as AttendanceItem,
+            }
+          : item
+      )
+    )
   }
 
   return (
@@ -559,7 +658,8 @@ export default function PresencasClient({
                   key={event.id}
                   value={event.id}
                 >
-                  {event.name}
+                  {event.name} - {formatDate(event.start_date)} a{' '}
+                  {formatDate(event.end_date)}
                 </option>
               ))}
 
@@ -610,6 +710,15 @@ export default function PresencasClient({
 
           </div>
 
+          <button
+            type="button"
+            className="event-cancel-btn attendance-pdf-btn"
+            onClick={printAttendances}
+          >
+            <Printer />
+            Gerar PDF
+          </button>
+
         </section>
 
         <section className="events-list-card">
@@ -633,208 +742,52 @@ export default function PresencasClient({
 
             </div>
           ) : (
-            <div className="events-table-scroll">
+            <div className="operation-event-groups">
+              {attendanceGroups.map((group) => (
+                <article className="operation-event-group attendance-date-group" key={group.groupKey}>
+                  <header className="operation-event-group-header">
+                    <div className="table-icon"><Calendar /></div>
+                    <div>
+                      <span>EVENTO</span>
+                      <h3>{group.eventName}</h3>
+                      <p className="attendance-group-date">Data: {formatDate(group.workDate)}</p>
+                    </div>
+                    <strong>{group.items.length} trabalhador(es)</strong>
+                  </header>
 
-              <table className="management-table attendance-table">
+                  <div className="operation-team-list attendance-team-list">
+                    {group.items.map((item) => {
+                      const worker = getWorker(item)
+                      const attendance = getAttendance(item)
+                      const attendanceStatus = attendance?.attendance_status ?? 'pending'
+                      const saving = savingId === item.id
 
-                <thead>
-
-                  <tr>
-                    <th>Trabalhador</th>
-                    <th>Evento</th>
-                    <th>Data</th>
-                    <th>Função</th>
-                    <th>Entrada</th>
-                    <th>Saída</th>
-                    <th>Status</th>
-                    <th>Ações</th>
-                  </tr>
-
-                </thead>
-
-                <tbody>
-
-                  {filteredSchedules.map((item) => {
-                    const worker = getWorker(item)
-                    const event = getEvent(item)
-                    const attendance = getAttendance(item)
-
-                    const attendanceStatus =
-                      attendance?.attendance_status ??
-                      'pending'
-
-                    const saving =
-                      savingId === item.id
-
-                    return (
-                      <tr key={item.id}>
-
-                        <td>
-                          <div className="event-name-cell">
-
-                            <div className="table-icon">
-                              <User />
-                            </div>
-
-                            <div>
-                              <strong>
-                                {worker?.full_name ?? '-'}
-                              </strong>
-
-                              <span>
-                                {worker?.phone ??
-                                  'Telefone não informado'}
-                              </span>
-                            </div>
-
+                      return (
+                        <div className="operation-attendance-row" key={item.id}>
+                          <div className="operation-worker-name">
+                            <div className="table-icon"><User /></div>
+                            <div><strong>{worker?.full_name ?? '-'}</strong></div>
                           </div>
-                        </td>
-
-                        <td>
-                          <div className="table-location">
-                            <Calendar />
-                            {event?.name ?? '-'}
-                          </div>
-                        </td>
-
-                        <td>
-                          {formatDate(item.work_date)}
-                        </td>
-
-                        <td>
-                          {item.role_name ||
-                            worker?.role_name ||
-                            '-'}
-                        </td>
-
-                        <td>
-                          <input
-                            className="attendance-time"
-                            type="time"
-                            value={
-                              attendance?.check_in?.slice(
-                                0,
-                                5
-                              ) ?? ''
-                            }
-                            onChange={(e) =>
-                              updateAttendance(
-                                item.id,
-                                attendanceStatus,
-                                e.target.value,
-                                undefined
-                              )
-                            }
-                          />
-                        </td>
-
-                        <td>
-                          <input
-                            className="attendance-time"
-                            type="time"
-                            value={
-                              attendance?.check_out?.slice(
-                                0,
-                                5
-                              ) ?? ''
-                            }
-                            onChange={(e) =>
-                              updateAttendance(
-                                item.id,
-                                attendanceStatus,
-                                undefined,
-                                e.target.value
-                              )
-                            }
-                          />
-                        </td>
-
-                        <td>
-                          <span
-                            className={`attendance-status attendance-${attendanceStatus}`}
-                          >
-
-                            {attendanceStatus ===
-                              'present' && (
-                              <CheckCircle2 />
-                            )}
-
-                            {attendanceStatus ===
-                              'absent' && (
-                              <XCircle />
-                            )}
-
-                            {attendanceStatus ===
-                              'pending' && (
-                              <CircleHelp />
-                            )}
-
-                            {statusText(
-                              attendanceStatus
-                            )}
-
+                          <div><span>Data / Função</span><strong>{formatDate(item.work_date)} · {item.role_name || worker?.role_name || '-'}</strong></div>
+                          <label><span>Entrada</span><input className="attendance-time" type="time" value={attendance?.check_in?.slice(0, 5) ?? ''} onChange={(e) => updateAttendance(item.id, attendanceStatus, e.target.value, undefined)} /></label>
+                          <label><span>Saída</span><input className="attendance-time" type="time" value={attendance?.check_out?.slice(0, 5) ?? ''} onChange={(e) => updateAttendance(item.id, attendanceStatus, undefined, e.target.value)} /></label>
+                          <span className={`attendance-status attendance-${attendanceStatus}`}>
+                            {attendanceStatus === 'present' && <CheckCircle2 />}
+                            {attendanceStatus === 'absent' && <XCircle />}
+                            {attendanceStatus === 'pending' && <CircleHelp />}
+                            {statusText(attendanceStatus)}
                           </span>
-                        </td>
-
-                        <td>
                           <div className="attendance-actions">
-
-                            <button
-                              type="button"
-                              className="attendance-present-btn"
-                              disabled={saving}
-                              onClick={() =>
-                                updateAttendance(
-                                  item.id,
-                                  'present'
-                                )
-                              }
-                              title="Marcar presença"
-                            >
-                              <CheckCircle2 />
-                            </button>
-
-                            <button
-                              type="button"
-                              className="attendance-absent-btn"
-                              disabled={saving}
-                              onClick={() =>
-                                updateAttendance(
-                                  item.id,
-                                  'absent'
-                                )
-                              }
-                              title="Marcar falta"
-                            >
-                              <XCircle />
-                            </button>
-
-                            <button
-                              type="button"
-                              className="attendance-pending-btn"
-                              disabled={saving}
-                              onClick={() =>
-                                updateAttendance(
-                                  item.id,
-                                  'pending'
-                                )
-                              }
-                              title="Voltar para pendente"
-                            >
-                              <Clock3 />
-                            </button>
-
+                            <button type="button" className="attendance-present-btn" disabled={saving} onClick={() => updateAttendance(item.id, 'present')} title="Marcar presença"><CheckCircle2 /></button>
+                            <button type="button" className="attendance-absent-btn" disabled={saving} onClick={() => updateAttendance(item.id, 'absent')} title="Marcar falta"><XCircle /></button>
+                            <button type="button" className="attendance-pending-btn" disabled={saving} onClick={() => updateAttendance(item.id, 'pending')} title="Voltar para pendente"><Clock3 /></button>
                           </div>
-                        </td>
-
-                      </tr>
-                    )
-                  })}
-
-                </tbody>
-
-              </table>
-
+                        </div>
+                      )
+                    })}
+                  </div>
+                </article>
+              ))}
             </div>
           )}
 
