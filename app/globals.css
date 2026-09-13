@@ -6686,3 +6686,136 @@ html[data-theme='light'] .cash-chart-real {
   border-radius: 14px;
   background: linear-gradient(180deg, #fbfdff, #f6f9fc);
 }
+
+/* Dashboard focado: gráfico e agenda em largura total */
+.dashboard-grid.dashboard-grid-focus {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.dashboard-grid-focus .chart-panel {
+  min-height: 470px;
+  padding: 20px;
+}
+
+.dashboard-grid-focus .events-panel {
+  min-height: 420px;
+  padding: 20px;
+}
+
+.panel-description {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.chart-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0 12px;
+}
+
+.chart-summary-row > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 31px;
+  padding: 6px 10px;
+  border: 1px solid rgba(148, 163, 184, .12);
+  border-radius: 999px;
+  background: rgba(15, 30, 47, .72);
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.chart-summary-row strong {
+  color: var(--text);
+  font-size: 10px;
+}
+
+.dashboard-grid-focus .line-chart {
+  min-height: 330px;
+  padding-left: 64px;
+}
+
+.dashboard-grid-focus .chart-svg {
+  left: 64px;
+  width: calc(100% - 76px);
+}
+
+.dashboard-grid-focus .chart-grid-lines {
+  left: 64px;
+}
+
+.dashboard-grid-focus .chart-dates {
+  left: 64px;
+  right: 12px;
+}
+
+.chart-value-scale {
+  position: absolute;
+  z-index: 2;
+  top: 17px;
+  bottom: 32px;
+  left: 10px;
+  width: 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #71839a;
+  font-size: 8px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.dashboard-grid-focus .event-table th {
+  padding: 14px 16px;
+  font-size: 9px;
+}
+
+.dashboard-grid-focus .event-table td {
+  padding: 17px 16px;
+  font-size: 10px;
+}
+
+.dashboard-grid-focus .dashboard-progress-cell {
+  max-width: 240px;
+}
+
+html[data-theme='light'] .chart-summary-row > span {
+  border-color: #dfe7f1;
+  background: #f6f9fd;
+  color: #64748b;
+}
+
+html[data-theme='light'] .chart-summary-row strong {
+  color: #172033;
+}
+
+@media (max-width: 720px) {
+  .dashboard-grid-focus .chart-panel,
+  .dashboard-grid-focus .events-panel {
+    padding: 14px;
+  }
+
+  .dashboard-grid-focus .line-chart {
+    min-height: 280px;
+    padding-left: 48px;
+  }
+
+  .dashboard-grid-focus .chart-svg {
+    left: 48px;
+    width: calc(100% - 56px);
+  }
+
+  .dashboard-grid-focus .chart-grid-lines,
+  .dashboard-grid-focus .chart-dates {
+    left: 48px;
+  }
+
+  .chart-value-scale {
+    width: 38px;
+    font-size: 7px;
+  }
+}
