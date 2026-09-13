@@ -5640,6 +5640,140 @@ html[data-theme="light"] .dashboard-month-picker input{
   opacity: 0.42;
 }
 
+/* Dashboard principal: acabamento profissional e gráficos suaves */
+.dashboard-main {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(37, 99, 235, .08), transparent 30%),
+    radial-gradient(circle at 92% 12%, rgba(124, 58, 237, .055), transparent 24%);
+}
+
+.summary-card,
+.dash-panel {
+  position: relative;
+  border: 1px solid rgba(96, 165, 250, .11);
+  border-radius: 17px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .12);
+}
+
+.summary-card {
+  min-height: 106px;
+  padding: 17px;
+}
+
+.summary-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: 17px 0 0 17px;
+  background: currentColor;
+  opacity: .8;
+}
+
+.summary-card .summary-icon {
+  width: 34px;
+  height: 34px;
+  padding: 7px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .04);
+}
+
+.summary-card small {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-panel {
+  padding: 17px;
+  overflow: hidden;
+}
+
+.chart-panel,
+.costs-panel {
+  min-height: 365px;
+}
+
+.chart-panel::after,
+.costs-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(96, 165, 250, .035), transparent 42%);
+}
+
+.line-chart {
+  min-height: 278px;
+  border: 1px solid rgba(148, 163, 184, .07);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(15, 30, 46, .72), rgba(8, 18, 29, .24));
+}
+
+.line-chart .line {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.line-chart .profit-line,
+.line-chart .cost-line {
+  stroke-width: 3.5;
+}
+
+.chart-grid-lines {
+  inset: 10px 10px 27px;
+  border-radius: 14px;
+}
+
+.events-panel,
+.cash-panel {
+  min-height: 330px;
+}
+
+.events-panel .panel-label {
+  display: block;
+  margin-bottom: 4px;
+  letter-spacing: .08em;
+}
+
+.event-table tbody tr {
+  transition: background-color .18s ease, transform .18s ease;
+}
+
+.event-table tbody tr:hover {
+  background: rgba(59, 130, 246, .055);
+}
+
+.cash-bar-area .bar {
+  border-radius: 999px 999px 4px 4px;
+}
+
+.cash-bar-area .bar.income {
+  background: linear-gradient(180deg, #4ade80, #16a34a);
+}
+
+.cash-bar-area .bar.expense {
+  background: linear-gradient(180deg, #fb7185, #dc2626);
+}
+
+[data-theme='light'] .dashboard-main {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(37, 99, 235, .07), transparent 30%),
+    #f5f7fb;
+}
+
+[data-theme='light'] .summary-card,
+[data-theme='light'] .dash-panel {
+  border-color: rgba(15, 23, 42, .08);
+  box-shadow: 0 14px 38px rgba(15, 23, 42, .07);
+}
+
+[data-theme='light'] .line-chart {
+  border-color: rgba(15, 23, 42, .07);
+  background: linear-gradient(180deg, rgba(239, 246, 255, .92), rgba(255, 255, 255, .72));
+}
+
 
 /* Cards de eventos para organizar escala e presença */
 .event-cards-grid {
