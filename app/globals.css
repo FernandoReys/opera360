@@ -5131,35 +5131,47 @@ html[data-theme="light"] .indicator-summary article{
 .dash-sidebar{
   height:100vh;
   min-height:100vh;
-  overflow-y:auto;
+  overflow-y:hidden;
   overflow-x:hidden;
   padding-bottom:16px;
   scrollbar-width:thin;
   scrollbar-color:rgba(148,163,184,.18) transparent;
 }
 
-.dash-sidebar::-webkit-scrollbar{
+.sidebar-scroll{
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding-right:3px;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(148,163,184,.18) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar{
   width:4px;
 }
 
-.dash-sidebar::-webkit-scrollbar-track{
+.sidebar-scroll::-webkit-scrollbar-track{
   background:transparent;
 }
 
-.dash-sidebar::-webkit-scrollbar-thumb{
+.sidebar-scroll::-webkit-scrollbar-thumb{
   background:rgba(148,163,184,.18);
   border-radius:999px;
 }
 
-.dash-sidebar::-webkit-scrollbar-thumb:hover{
+.sidebar-scroll::-webkit-scrollbar-thumb:hover{
   background:rgba(148,163,184,.32);
 }
 
 .sidebar-bottom{
   position:static !important;
-  margin-top:18px;
+  flex:0 0 auto;
+  margin-top:0;
   padding-top:8px;
-  background:transparent !important;
+  background:#0b1521 !important;
 }
 
 .dash-user{
@@ -5185,7 +5197,7 @@ html[data-theme="light"] .indicator-summary article{
   .dash-sidebar{
     height:100dvh;
     min-height:100dvh;
-    overflow-y:auto;
+    overflow-y:hidden;
     overscroll-behavior:contain;
   }
 }
