@@ -5341,6 +5341,76 @@ html[data-theme="light"] .dash-sidebar .conectworks-brand strong span{
   color:var(--muted);
 }
 
+.dashboard-month-picker{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  flex:0 0 auto;
+}
+
+.dashboard-month-picker>span,
+.cash-chart-month-label{
+  color:var(--muted);
+  font-size:9px;
+  font-weight:800;
+  text-transform:capitalize;
+}
+
+.dashboard-month-picker input{
+  min-height:34px;
+  padding:0 9px;
+  border:0;
+  outline:0;
+  border-radius:7px;
+  background:var(--surface-2);
+  color:var(--text);
+  color-scheme:dark;
+  font-size:10px;
+  font-weight:800;
+  cursor:pointer;
+}
+
+.dashboard-month-picker input:focus{
+  box-shadow:0 0 0 2px rgba(59,130,246,.22);
+}
+
+.chart-dates-daily span{
+  flex:1 1 0;
+  text-align:center;
+  visibility:hidden;
+}
+
+.chart-dates-daily span.visible{
+  visibility:visible;
+}
+
+.cash-bars:has(.cash-day){
+  gap:3px;
+}
+
+.cash-day{
+  gap:6px;
+}
+
+.cash-day .cash-bar-area{
+  gap:2px;
+}
+
+.cash-day .bar{
+  width:min(7px,42%);
+}
+
+.cash-day>span{
+  font-size:7px;
+  visibility:hidden;
+}
+
+.cash-day:first-child>span,
+.cash-day:nth-child(5n)>span,
+.cash-day:last-child>span{
+  visibility:visible;
+}
+
 .dashboard-view-all{
   min-height:34px;
   padding:0 12px;
@@ -5357,6 +5427,12 @@ html[data-theme="light"] .dashboard-period-select select{
   color:#0f172a;
 }
 
+html[data-theme="light"] .dashboard-month-picker input{
+  background:#eef2f7;
+  color:#0f172a;
+  color-scheme:light;
+}
+
 @media(max-width:600px){
   .dashboard-period-select{
     min-width:108px;
@@ -5364,6 +5440,16 @@ html[data-theme="light"] .dashboard-period-select select{
 
   .dashboard-period-select select,
   .dashboard-view-all{
+    min-height:40px;
+    font-size:12px;
+  }
+
+  .dashboard-month-picker{
+    width:100%;
+    justify-content:flex-end;
+  }
+
+  .dashboard-month-picker input{
     min-height:40px;
     font-size:12px;
   }

@@ -72,7 +72,7 @@ type AdvanceItem = {
   settled: boolean
 }
 
-type MonthBucket = {
+type DayBucket = {
   key: string
   label: string
   revenue: number
@@ -139,22 +139,17 @@ function formatDate(value: string) {
   return `${day}/${month}/${year}`
 }
 
-function getMonthBuckets(count = 6) {
-  const now = new Date()
-  const result: MonthBucket[] = []
+function getDayBuckets(selectedMonth: string) {
+  const [year, month] = selectedMonth.split('-').map(Number)
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const result: DayBucket[] = []
 
-  for (let offset = count - 1; offset >= 0; offset--) {
-    const date = new Date(now.getFullYear(), now.getMonth() - offset, 1)
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dayLabel = String(day).padStart(2, '0')
 
     result.push({
-      key,
-      label: new Intl.DateTimeFormat('pt-BR', {
-        month: 'short',
-      })
-        .format(date)
-        .replace('.', '')
-        .toUpperCase(),
+      key: `${selectedMonth}-${dayLabel}`,
+      label: dayLabel,
       revenue: 0,
       costs: 0,
       profit: 0,
@@ -201,7 +196,9 @@ export default function DashboardClient({
   const [dark, setDark] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [chartPeriod, setChartPeriod] = useState<1 | 3 | 6 | 12>(6)
+  const [chartMonth, setChartMonth] = useState(() =>
+    monthKey(toDateOnly(new Date()))
+  )
 
   const [events, setEvents] = useState<EventItem[]>([])
   const [schedules, setSchedules] = useState<ScheduleItem[]>([])
@@ -430,12 +427,12 @@ export default function DashboardClient({
 
   const currentProfit = currentRevenue - currentCosts
 
-  const monthBuckets = useMemo(() => {
-    const buckets = getMonthBuckets(chartPeriod)
+  const dayBuckets = useMemo(() => {
+    const buckets = getDayBuckets(chartMonth)
     const map = new Map(buckets.map((bucket) => [bucket.key, bucket]))
 
     events.forEach((event) => {
-      const bucket = map.get(monthKey(event.start_date))
+      const bucket = map.get(event.start_date)
 
       if (!bucket || event.status === 'cancelled') return
 
@@ -446,7 +443,7 @@ export default function DashboardClient({
     })
 
     payments.forEach((payment) => {
-      const bucket = map.get(monthKey(payment.work_date))
+      const bucket = map.get(payment.work_date)
 
       if (!bucket) return
 
@@ -464,7 +461,7 @@ export default function DashboardClient({
     })
 
     meals.forEach((meal) => {
-      const bucket = map.get(monthKey(meal.meal_date))
+      const bucket = map.get(meal.meal_date)
 
       if (!bucket || meal.status === 'cancelled') return
 
@@ -474,7 +471,7 @@ export default function DashboardClient({
     })
 
     transports.forEach((transport) => {
-      const bucket = map.get(monthKey(transport.transport_date))
+      const bucket = map.get(transport.transport_date)
 
       if (!bucket || transport.status === 'cancelled') return
 
@@ -484,22 +481,29 @@ export default function DashboardClient({
     })
 
     advances.forEach((advance) => {
-      const bucket = map.get(monthKey(advance.advance_date))
+      const bucket = map.get(advance.advance_date)
 
       if (!bucket) return
 
       bucket.cashOut += safeNumber(advance.amount)
     })
 
+    let accumulatedRevenue = 0
+    let accumulatedCosts = 0
+
     buckets.forEach((bucket) => {
-      bucket.profit = bucket.revenue - bucket.costs
+      accumulatedRevenue += bucket.revenue
+      accumulatedCosts += bucket.costs
+      bucket.revenue = accumulatedRevenue
+      bucket.costs = accumulatedCosts
+      bucket.profit = accumulatedRevenue - accumulatedCosts
     })
 
     return buckets
-  }, [events, payments, meals, transports, advances, chartPeriod])
+  }, [events, payments, meals, transports, advances, chartMonth])
 
   const chartMax = Math.max(
-    ...monthBuckets.flatMap((bucket) => [
+    ...dayBuckets.flatMap((bucket) => [
       bucket.revenue,
       bucket.costs,
       Math.max(bucket.profit, 0),
@@ -508,17 +512,17 @@ export default function DashboardClient({
   )
 
   const revenuePoints = linePoints(
-    monthBuckets.map((bucket) => bucket.revenue),
+    dayBuckets.map((bucket) => bucket.revenue),
     chartMax
   )
 
   const costPoints = linePoints(
-    monthBuckets.map((bucket) => bucket.costs),
+    dayBuckets.map((bucket) => bucket.costs),
     chartMax
   )
 
   const profitPoints = linePoints(
-    monthBuckets.map((bucket) => Math.max(bucket.profit, 0)),
+    dayBuckets.map((bucket) => Math.max(bucket.profit, 0)),
     chartMax
   )
 
@@ -565,7 +569,7 @@ export default function DashboardClient({
   }
 
   const maxCash = Math.max(
-    ...monthBuckets.flatMap((bucket) => [
+    ...dayBuckets.flatMap((bucket) => [
       bucket.cashIn,
       bucket.cashOut,
     ]),
@@ -705,26 +709,19 @@ export default function DashboardClient({
             <article className="dash-panel chart-panel">
               <div className="panel-header">
                 <div>
-                  <h3>FATURAMENTO VS CUSTOS VS LUCRO</h3>
+                  <h3>FATURAMENTO VS CUSTOS VS LUCRO POR DIA</h3>
                 </div>
-                <div className="dashboard-period-select">
-                  <select
-                    value={chartPeriod}
-                    onChange={(e) =>
-                      setChartPeriod(
-                        Number(e.target.value) as 1 | 3 | 6 | 12
-                      )
-                    }
-                    aria-label="Selecionar período do gráfico"
-                  >
-                    <option value={1}>1 mês</option>
-                    <option value={3}>3 meses</option>
-                    <option value={6}>6 meses</option>
-                    <option value={12}>12 meses</option>
-                  </select>
-
-                  <ChevronDown />
-                </div>
+                <label className="dashboard-month-picker">
+                  <span>Mês</span>
+                  <input
+                    type="month"
+                    value={chartMonth}
+                    onChange={(event) => {
+                      if (event.target.value) setChartMonth(event.target.value)
+                    }}
+                    aria-label="Selecionar mês do gráfico"
+                  />
+                </label>
               </div>
 
               <div className="chart-legend">
@@ -736,7 +733,7 @@ export default function DashboardClient({
               <div className="line-chart">
                 <div className="chart-grid-lines" />
 
-                {monthBuckets.length > 0 && (
+                {dayBuckets.length > 0 && (
                   <svg
                     viewBox="0 0 700 230"
                     preserveAspectRatio="none"
@@ -781,9 +778,20 @@ export default function DashboardClient({
                   </svg>
                 )}
 
-                <div className="chart-dates">
-                  {monthBuckets.map((bucket) => (
-                    <span key={bucket.key}>{bucket.label}</span>
+                <div className="chart-dates chart-dates-daily">
+                  {dayBuckets.map((bucket, index) => (
+                    <span
+                      className={
+                        index === 0 ||
+                        (index + 1) % 5 === 0 ||
+                        index === dayBuckets.length - 1
+                          ? 'visible'
+                          : ''
+                      }
+                      key={bucket.key}
+                    >
+                      {bucket.label}
+                    </span>
                   ))}
                 </div>
               </div>
@@ -911,25 +919,13 @@ export default function DashboardClient({
           {owner && (
             <article className="dash-panel cash-panel">
               <div className="panel-header">
-                <div><h3>FLUXO DE CAIXA (PERÍODO)</h3></div>
-                <div className="dashboard-period-select">
-                  <select
-                    value={chartPeriod}
-                    onChange={(e) =>
-                      setChartPeriod(
-                        Number(e.target.value) as 1 | 3 | 6 | 12
-                      )
-                    }
-                    aria-label="Selecionar período do gráfico"
-                  >
-                    <option value={1}>1 mês</option>
-                    <option value={3}>3 meses</option>
-                    <option value={6}>6 meses</option>
-                    <option value={12}>12 meses</option>
-                  </select>
-
-                  <ChevronDown />
-                </div>
+                <div><h3>FLUXO DE CAIXA POR DIA</h3></div>
+                <span className="cash-chart-month-label">
+                  {new Intl.DateTimeFormat('pt-BR', {
+                    month: 'long',
+                    year: 'numeric',
+                  }).format(new Date(`${chartMonth}-01T12:00:00`))}
+                </span>
               </div>
 
               <div className="cash-legend">
@@ -938,9 +934,14 @@ export default function DashboardClient({
               </div>
 
               <div className="cash-chart-real">
-                <div className="cash-bars">
-                  {monthBuckets.map((bucket) => (
-                    <div className="cash-month" key={bucket.key}>
+                <div
+                  className="cash-bars"
+                  style={{
+                    gridTemplateColumns: `repeat(${dayBuckets.length}, minmax(5px, 1fr))`,
+                  }}
+                >
+                  {dayBuckets.map((bucket) => (
+                    <div className="cash-month cash-day" key={bucket.key}>
                       <div className="cash-bar-area">
                         <div
                           className="bar income"
