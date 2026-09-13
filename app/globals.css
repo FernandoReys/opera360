@@ -6562,3 +6562,127 @@ html[data-theme='light'] .profile-avatar-editor {
 @media (max-width: 560px) {
   .profile-avatar-editor { align-items: flex-start; }
 }
+
+/* Dashboard principal — tema claro consistente */
+html[data-theme='light'] .dashboard-main {
+  background:
+    radial-gradient(circle at 14% 0%, rgba(37, 99, 235, .09), transparent 28%),
+    linear-gradient(180deg, #f7f9fd 0%, #f2f5fa 100%);
+}
+
+html[data-theme='light'] .summary-card {
+  color: #172033;
+  border-color: #dce4ef;
+  box-shadow: 0 12px 28px rgba(30, 52, 84, .08);
+}
+
+html[data-theme='light'] .summary-card.blue-card {
+  background: linear-gradient(135deg, #eaf2ff 0%, #ffffff 72%);
+}
+
+html[data-theme='light'] .summary-card.green-card {
+  background: linear-gradient(135deg, #e9f9f0 0%, #ffffff 72%);
+}
+
+html[data-theme='light'] .summary-card.orange-card {
+  background: linear-gradient(135deg, #fff6e5 0%, #ffffff 72%);
+}
+
+html[data-theme='light'] .summary-card.purple-card {
+  background: linear-gradient(135deg, #f4edff 0%, #ffffff 72%);
+}
+
+html[data-theme='light'] .summary-card strong {
+  color: #172033;
+}
+
+html[data-theme='light'] .summary-card small {
+  color: #6b7c93;
+}
+
+html[data-theme='light'] .summary-card .summary-icon {
+  background: rgba(255, 255, 255, .8);
+  box-shadow: 0 8px 18px rgba(30, 52, 84, .08);
+}
+
+html[data-theme='light'] .dash-panel {
+  color: #172033;
+  border-color: #dce4ef;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 14px 34px rgba(30, 52, 84, .075);
+}
+
+html[data-theme='light'] .chart-panel::after,
+html[data-theme='light'] .costs-panel::after {
+  background: linear-gradient(135deg, rgba(59, 130, 246, .035), transparent 42%);
+}
+
+html[data-theme='light'] .panel-header h3,
+html[data-theme='light'] .event-table td strong,
+html[data-theme='light'] .events-empty strong,
+html[data-theme='light'] .dashboard-empty-chart strong {
+  color: #172033;
+}
+
+html[data-theme='light'] .chart-legend,
+html[data-theme='light'] .cash-legend,
+html[data-theme='light'] .cash-chart-month-label,
+html[data-theme='light'] .dashboard-empty-chart span,
+html[data-theme='light'] .events-empty span {
+  color: #64748b;
+}
+
+html[data-theme='light'] .line-chart {
+  border-color: #dfe7f1;
+  background: linear-gradient(180deg, #f8fbff 0%, #f1f5fa 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9);
+}
+
+html[data-theme='light'] .chart-grid-lines {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 48px,
+    rgba(100, 116, 139, .11) 49px
+  );
+}
+
+html[data-theme='light'] .chart-dates,
+html[data-theme='light'] .chart-dates span,
+html[data-theme='light'] .cash-month > span {
+  color: #718096;
+}
+
+html[data-theme='light'] .event-table th {
+  color: #60728a;
+}
+
+html[data-theme='light'] .event-table td {
+  color: #334155;
+  border-color: #e8edf4;
+}
+
+html[data-theme='light'] .event-table tbody tr:hover {
+  background: #f5f8fd;
+}
+
+html[data-theme='light'] .progress {
+  background: #e7edf5;
+}
+
+html[data-theme='light'] .dashboard-month-picker input,
+html[data-theme='light'] .period-btn.dashboard-view-all {
+  color: #243247;
+  border: 1px solid #dce4ef;
+  background: #f7f9fc;
+}
+
+html[data-theme='light'] .dashboard-month-picker input:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, .12);
+}
+
+html[data-theme='light'] .cash-chart-real {
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfdff, #f6f9fc);
+}
