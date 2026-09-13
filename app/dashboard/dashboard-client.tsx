@@ -89,6 +89,11 @@ type CostBreakdown = {
   other: number
 }
 
+type ChartPoint = {
+  x: number
+  y: number
+}
+
 function safeNumber(value: unknown) {
   const number = Number(value ?? 0)
   return Number.isFinite(number) ? number : 0
@@ -161,18 +166,17 @@ function getDayBuckets(selectedMonth: string) {
   return result
 }
 
-function linePoints(
+function chartPoints(
   values: number[],
   maxValue: number,
   width = 700,
   height = 220
-) {
-  if (values.length === 0) return ''
+): ChartPoint[] {
+  if (values.length === 0) return []
 
   const safeMax = Math.max(maxValue, 1)
 
-  return values
-    .map((value, index) => {
+  return values.map((value, index) => {
       const x =
         values.length === 1
           ? width / 2
@@ -181,9 +185,31 @@ function linePoints(
       const normalized = Math.max(0, value) / safeMax
       const y = height - normalized * (height - 30) - 15
 
-      return `${x.toFixed(1)},${y.toFixed(1)}`
+      return { x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) }
     })
-    .join(' ')
+}
+
+function smoothLinePath(points: ChartPoint[]) {
+  if (points.length === 0) return ''
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`
+
+  return points.reduce((path, point, index) => {
+    if (index === 0) return `M ${point.x} ${point.y}`
+
+    const previous = points[index - 1]
+    const middleX = Number(((previous.x + point.x) / 2).toFixed(1))
+
+    return `${path} C ${middleX} ${previous.y}, ${middleX} ${point.y}, ${point.x} ${point.y}`
+  }, '')
+}
+
+function areaPath(points: ChartPoint[], baseline = 220) {
+  if (points.length === 0) return ''
+
+  const first = points[0]
+  const last = points[points.length - 1]
+
+  return `${smoothLinePath(points)} L ${last.x} ${baseline} L ${first.x} ${baseline} Z`
 }
 
 export default function DashboardClient({
@@ -343,13 +369,18 @@ export default function DashboardClient({
   const today = toDateOnly(new Date())
   const currentMonth = today.slice(0, 7)
 
-  const currentEvents = useMemo(() => {
-    return events.filter((event) => {
-      const dateInRange =
-        event.start_date <= today && event.end_date >= today
-
-      return event.status === 'in_progress' || dateInRange
-    })
+  const operationalEvents = useMemo(() => {
+    return events
+      .filter(
+        (event) =>
+          event.status !== 'cancelled' &&
+          event.status !== 'completed' &&
+          event.end_date >= today
+      )
+      .sort((first, second) =>
+        first.start_date.localeCompare(second.start_date)
+      )
+      .slice(0, 6)
   }, [events, today])
 
   const activeWorkersToday = useMemo(() => {
@@ -511,20 +542,26 @@ export default function DashboardClient({
     1
   )
 
-  const revenuePoints = linePoints(
+  const revenueChartPoints = chartPoints(
     dayBuckets.map((bucket) => bucket.revenue),
     chartMax
   )
 
-  const costPoints = linePoints(
+  const costChartPoints = chartPoints(
     dayBuckets.map((bucket) => bucket.costs),
     chartMax
   )
 
-  const profitPoints = linePoints(
+  const profitChartPoints = chartPoints(
     dayBuckets.map((bucket) => Math.max(bucket.profit, 0)),
     chartMax
   )
+
+  const revenuePath = smoothLinePath(revenueChartPoints)
+  const costPath = smoothLinePath(costChartPoints)
+  const profitPath = smoothLinePath(profitChartPoints)
+  const costAreaPath = areaPath(costChartPoints)
+  const profitAreaPath = areaPath(profitChartPoints)
 
   const totalCostDistribution = currentCosts
 
@@ -650,7 +687,7 @@ export default function DashboardClient({
           {owner && (
             <article className="summary-card blue-card">
               <div>
-                <span>FATURAMENTO (PERÍODO)</span>
+                <span>FATURAMENTO DO MÊS</span>
                 <strong>{loading ? '...' : formatMoney(currentRevenue)}</strong>
                 <small>Contratos com início no mês atual</small>
               </div>
@@ -661,7 +698,7 @@ export default function DashboardClient({
           {owner && (
             <article className="summary-card green-card">
               <div>
-                <span>LUCRO LÍQUIDO (PERÍODO)</span>
+                <span>LUCRO LÍQUIDO DO MÊS</span>
                 <strong>{loading ? '...' : formatMoney(currentProfit)}</strong>
                 <small
                   className={
@@ -679,12 +716,12 @@ export default function DashboardClient({
 
           <article className="summary-card orange-card">
             <div>
-              <span>EVENTOS EM ANDAMENTO</span>
-              <strong>{loading ? '...' : currentEvents.length}</strong>
+              <span>EVENTOS NA AGENDA</span>
+              <strong>{loading ? '...' : operationalEvents.length}</strong>
               <small>
-                {currentEvents.length > 0
-                  ? `${currentEvents.length} operação(ões) ativa(s)`
-                  : 'Nenhum evento em andamento'}
+                {operationalEvents[0]
+                  ? `Próximo: ${operationalEvents[0].name} • ${formatDate(operationalEvents[0].start_date)}`
+                  : 'Nenhum evento programado'}
               </small>
             </div>
             <CalendarDays className="summary-icon" />
@@ -692,7 +729,7 @@ export default function DashboardClient({
 
           <article className="summary-card purple-card">
             <div>
-              <span>TRABALHADORES ATIVOS</span>
+              <span>EQUIPE ESCALADA HOJE</span>
               <strong>{loading ? '...' : activeWorkersToday}</strong>
               <small>
                 {activeWorkersToday > 0
@@ -754,25 +791,25 @@ export default function DashboardClient({
                       </filter>
                     </defs>
 
-                    <polygon
+                    <path
                       className="chart-area cost-area"
-                      points={`0,220 ${costPoints} 700,220`}
+                      d={costAreaPath}
                       fill="url(#cost-area)"
                     />
-                    <polygon
+                    <path
                       className="chart-area profit-area"
-                      points={`0,220 ${profitPoints} 700,220`}
+                      d={profitAreaPath}
                       fill="url(#profit-area)"
                     />
-                    <polyline className="line revenue-line" points={revenuePoints} />
-                    <polyline
+                    <path className="line revenue-line" d={revenuePath} />
+                    <path
                       className="line cost-line"
-                      points={costPoints}
+                      d={costPath}
                       filter="url(#line-glow)"
                     />
-                    <polyline
+                    <path
                       className="line profit-line"
-                      points={profitPoints}
+                      d={profitPath}
                       filter="url(#line-glow)"
                     />
                   </svg>
@@ -849,7 +886,10 @@ export default function DashboardClient({
             }`}
           >
             <div className="panel-header">
-              <div><h3>EVENTOS EM ANDAMENTO</h3></div>
+              <div>
+                <span className="panel-label">PRÓXIMOS COMPROMISSOS</span>
+                <h3>AGENDA OPERACIONAL</h3>
+              </div>
 
               <button
                 type="button"
@@ -875,18 +915,20 @@ export default function DashboardClient({
                 </thead>
 
                 <tbody>
-                  {currentEvents.length === 0 ? (
+                  {operationalEvents.length === 0 ? (
                     <tr>
                       <td colSpan={6}>
                         <div className="events-empty">
-                          <strong>Nenhum evento em andamento</strong>
-                          <span>Os eventos em execução aparecerão aqui automaticamente.</span>
+                          <strong>Nenhum evento na agenda</strong>
+                          <span>Os próximos eventos aparecerão aqui automaticamente.</span>
                         </div>
                       </td>
                     </tr>
                   ) : (
-                    currentEvents.slice(0, 6).map((event) => {
+                    operationalEvents.map((event) => {
                       const progress = eventProgress(event)
+                      const eventIsToday =
+                        event.start_date <= today && event.end_date >= today
 
                       return (
                         <tr key={event.id}>
@@ -897,7 +939,9 @@ export default function DashboardClient({
                           </td>
                           <td>{event.workers_needed}</td>
                           <td>
-                            <span className="status running">Em andamento</span>
+                            <span className={`status ${eventIsToday ? 'running' : 'pending'}`}>
+                              {eventIsToday ? 'Em andamento' : 'Programado'}
+                            </span>
                           </td>
                           <td>
                             <div className="dashboard-progress-cell">
